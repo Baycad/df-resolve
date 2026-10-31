@@ -1,0 +1,23 @@
+# Ambiente Python
+venv/
+.venv/
+__pycache__/
+*.pyc
+
+# Bancos de dados locais
+*.db
+*.sqlite
+*.sqlite3
+instance/
+
+# Variaveis de ambiente e segredos
+.env
+.env.*
+!.env.example
+
+# Node e Expo (app mobile futuro)
+node_modules/
+.expo/
+
+# Arquivos de sistema
+desktop.ini
