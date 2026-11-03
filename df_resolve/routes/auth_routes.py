@@ -1,8 +1,8 @@
 import re
 
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, current_app, request, jsonify
 from flask_login import login_user, logout_user, current_user, login_required
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from df_resolve.models.models import db, User
@@ -16,6 +16,7 @@ SENHA_MIN = 8
 SENHA_MAX = 128
 # Limite generoso usado apenas no login, para não bloquear contas antigas.
 LOGIN_LIMITE = 1024
+METODO_HASH = 'scrypt'
 
 
 def _ler_json():
@@ -26,6 +27,22 @@ def _ler_json():
 
 def _erro(mensagem, status=400):
     return jsonify({'message': mensagem}), status
+
+
+def _atualizar_hash_antigo(user, password):
+    """Converte um hash antigo para o método atual, após um login correto."""
+    if user.password.startswith(f'{METODO_HASH}:'):
+        return
+
+    user_id = user.id
+    user.password = generate_password_hash(password, method=METODO_HASH)
+    try:
+        db.session.commit()
+    except SQLAlchemyError:
+        # Não impede o login; a conversão é refeita no próximo acesso.
+        # Sem traceback: a mensagem do SQLAlchemy incluiria o hash da senha.
+        db.session.rollback()
+        current_app.logger.warning('Não foi possível atualizar o hash do usuário %s.', user_id)
 
 
 @bp.route('/register', methods=['POST'])
@@ -52,8 +69,7 @@ def register():
     if User.query.filter_by(username=username).first():
         return _erro('Usuário já existe')
 
-    # O método de hash será trocado na Fase 2, com migração dos usuários atuais.
-    hashed_password = generate_password_hash(password, method='sha256')
+    hashed_password = generate_password_hash(password, method=METODO_HASH)
     new_user = User(username=username, password=hashed_password)
 
     db.session.add(new_user)
@@ -92,6 +108,7 @@ def login():
     if not user or not check_password_hash(user.password, password):
         return _erro('Credenciais inválidas', 401)
 
+    _atualizar_hash_antigo(user, password)
     login_user(user)
     return jsonify({'message': 'Login bem-sucedido'}), 200
 
