@@ -33,6 +33,7 @@ Repositório público: https://github.com/Baycad/df-resolve (branch `main`).
 - O usuário roda o servidor no próprio terminal. Para testes de API, usar `curl.exe` (não `curl`).
 - No PowerShell, JSON com aspas deve ir por arquivo temporário em `$env:TEMP` com `--data-binary "@arquivo"`.
 - Backups dos bancos: `X:\programação\DF-RESOLVE-BACKUPS\<pasta-nova>`. Nunca sobrescrever um backup existente.
+- A pasta de backups só aceita escrita como administrador. O backup é feito pelo usuário em PowerShell de administrador.
 
 ### Variáveis de ambiente do backend
 
@@ -63,7 +64,8 @@ Não atualizar isoladamente: Werkzeug 3 remove o hash `sha256` e exige Flask-Log
 
 ## Modelos (verificado)
 
-- `User`: id, username (String 80, único), password (String 120, hash).
+- `User`: id, username (String 80, único), password (String 255 no modelo, hash `scrypt`).
+  O banco em uso foi criado com VARCHAR(120); o SQLite não impõe o tamanho e grava hashes de 162 caracteres (testado). Outro banco exigiria migração.
 - `Denuncia`: id, titulo (100), descricao (Text), endereco (200), status (padrão "Pendente"), user_id (FK user.id).
 - Não existem: data de criação, categoria, foto, localização, papel de administrador.
 
@@ -93,22 +95,30 @@ Todas as respostas de erro usam JSON no formato `{"message": "..."}`.
   - Commit `462d6c8`: 401/400 em JSON, validação de entrada, SECRET_KEY por ambiente, host/porta/debug configuráveis.
   - Push feito: `origin/main` em `462d6c8`.
   - Os bancos continuam no histórico do primeiro commit (`9f2627a`). São dados de teste; o usuário decidiu não reescrever o histórico.
+- Fase 2 (hash de senha): implementada e testada em 2026-11-03, sem commit.
+  - Cadastro com `scrypt`. Login correto com hash antigo converte para `scrypt`; se a gravação falhar, o login continua e a conversão é refeita no próximo acesso (aviso no log, sem hash e sem traceback).
+  - Backup antes da fase: `X:\programação\DF-RESOLVE-BACKUPS\2026-10-31-antes-fase2`. A pasta foi criada em 2026-11-03; o nome segue o plano de 2026-10-31 e não deve ser alterado.
+  - Testes T1 a T15 aprovados. T15: o banco legado `df_resolve/denuncias.db` tem SHA256 idêntico ao do backup.
+  - Dados de teste criados: usuários `fase2_legado`, `fase2_legado2`, `fase2_novo` e denúncias 7 e 8. Eles permanecem no banco em uso e só podem ser removidos com autorização do usuário.
 
 ## Problemas conhecidos
 
-- Senhas com hash `sha256` (fraco e depreciado). Será corrigido na Fase 2.
+### Prioridade alta
+- Sem limite de tentativas de login. Agravado pela Fase 2: cada verificação `scrypt` usa cerca de 32 MB de memória (calculado pelos parâmetros N=32768 e r=8, não medido) e o login leva de 0,16 a 0,20 s (medido com `curl.exe`, tempo total da requisição em 4 logins de contas `scrypt`; o login com `sha256` levou 0,01 s). Tentativas repetidas permitem tanto adivinhar senhas quanto sobrecarregar o servidor.
+
+### Demais
+- As 5 contas originais continuam com `sha256` até fazerem login. Werkzeug 3 remove o `sha256`: atualizar antes da conversão impede o login dessas contas.
 - `frontend/index.html` é de uma versão antiga do backend (pede e-mail, aponta para `app.js` inexistente) e é servido em `/`.
 - `frontend/js/denuncia.js` não trata 401 quando o usuário não está logado.
-- Sem limite de tentativas de login.
+- Login de usuário inexistente responde mais rápido que o de usuário existente. Não é vazamento novo: o cadastro já informa "Usuário já existe".
 - Dependências de 2023 com vulnerabilidades corrigidas em versões posteriores.
 - Aviso do Git `unable to find all commit-graph files`: é só cache; pode ser recriado com `git commit-graph write --reachable` mediante autorização.
 
-## Próxima etapa: Fase 2 (PROPOSTA, aguardando aprovação)
+## Próxima etapa (PROPOSTA, aguardando decisão)
 
-Objetivo: trocar `sha256` por `scrypt` sem obrigar novo cadastro.
-- `auth_routes.py`: cadastro com `generate_password_hash(password, method="scrypt")`; no login bem-sucedido, se o hash não for `scrypt`, gerar novo hash e salvar.
-- `models.py`: coluna `password` de String(120) para String(255) (decisão pendente). No SQLite não exige migração.
-- Testes: backup novo; login de usuário antigo; verificar hash `scrypt` no banco em modo somente leitura; cadastro novo; segundo login; frontend web.
+1. Concluir a Fase 2: commit, se o usuário pedir.
+2. Limite de tentativas de login, antes da Fase 3, por ser prioridade alta. A abordagem fica para decidir: Flask-Limiter (nova dependência) ou contador próprio.
+3. Fase 3 (autenticação mobile), conforme o roadmap.
 
 ## Roadmap (PROPOSTA)
 
@@ -119,7 +129,7 @@ Objetivo: trocar `sha256` por `scrypt` sem obrigar novo cadastro.
 
 ## Decisões pendentes do usuário
 
-1. Aprovar a Fase 2 e o ajuste para String(255).
+1. Como implementar o limite de tentativas de login (Flask-Limiter ou contador próprio) e se ele vem antes da Fase 3.
 2. Mobile em `mobile/` neste repositório?
 3. Token opaco (recomendado) ou JWT?
 4. Expo Router + JavaScript?
