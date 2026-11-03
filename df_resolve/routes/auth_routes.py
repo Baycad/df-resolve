@@ -6,6 +6,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from df_resolve.models.models import db, User
+from df_resolve.limiter import limiter
 
 bp = Blueprint('auth', __name__, url_prefix='/auth')
 
@@ -17,6 +18,10 @@ SENHA_MAX = 128
 # Limite generoso usado apenas no login, para não bloquear contas antigas.
 LOGIN_LIMITE = 1024
 METODO_HASH = 'scrypt'
+# Limites por IP. Só as falhas de login contam no primeiro; o total protege contra rajadas.
+LIMITE_LOGIN_FALHAS = '5 per minute;20 per hour'
+LIMITE_LOGIN_TOTAL = '30 per minute'
+LIMITE_CADASTRO = '3 per minute;10 per hour'
 
 
 def _ler_json():
@@ -45,7 +50,12 @@ def _atualizar_hash_antigo(user, password):
         current_app.logger.warning('Não foi possível atualizar o hash do usuário %s.', user_id)
 
 
+def _login_falhou(response):
+    return response.status_code == 401
+
+
 @bp.route('/register', methods=['POST'])
+@limiter.limit(LIMITE_CADASTRO, methods=['POST'])
 def register():
     dados = _ler_json()
     if dados is None:
@@ -84,6 +94,8 @@ def register():
 
 
 @bp.route('/login', methods=['POST'])
+@limiter.limit(LIMITE_LOGIN_TOTAL, methods=['POST'])
+@limiter.limit(LIMITE_LOGIN_FALHAS, methods=['POST'], deduct_when=_login_falhou)
 def login():
     dados = _ler_json()
     if dados is None:

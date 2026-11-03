@@ -8,6 +8,7 @@ from werkzeug.exceptions import HTTPException
 
 from df_resolve.models.models import db, User
 from df_resolve.routes import denuncia_routes, auth_routes
+from df_resolve.limiter import limiter
 
 app = Flask(__name__, static_folder="../frontend", static_url_path="/")
 
@@ -72,6 +73,12 @@ def nao_autorizado():
     return jsonify({"message": "Autenticação necessária."}), 401
 
 
+# ------------------------------------------------------------------
+# Limite de tentativas (os limites ficam em auth_routes.py)
+# ------------------------------------------------------------------
+limiter.init_app(app)
+
+
 app.register_blueprint(denuncia_routes.bp)
 app.register_blueprint(auth_routes.bp)
 
@@ -88,6 +95,7 @@ MENSAGENS_HTTP = {
     404: "Recurso não encontrado.",
     405: "Método não permitido.",
     415: "Tipo de conteúdo não suportado. Envie os dados em JSON.",
+    429: "Muitas tentativas. Aguarde um pouco e tente novamente.",
 }
 
 
