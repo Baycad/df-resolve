@@ -35,6 +35,17 @@ Repositório público: https://github.com/Baycad/df-resolve (branch `main`).
 - Backups dos bancos: `X:\programação\DF-RESOLVE-BACKUPS\<pasta-nova>`. Nunca sobrescrever um backup existente.
 - A pasta de backups só aceita escrita como administrador. O backup é feito pelo usuário em PowerShell de administrador.
 
+### Modo rede (testes com celular)
+
+- O IP `192.168.0.9` vem do DHCP do roteador e pode mudar. Antes de cada teste, conferir com `ipconfig` (adaptador Ethernet). Se mudar, atualizar o `mobile/.env` e os dois comandos abaixo.
+- Flask (a partir da raiz): `cmd /c "set DF_RESOLVE_HOST=192.168.0.9&& .\venv\Scripts\python.exe -m df_resolve.app"`. O debug desliga sozinho (aparece o aviso e não aparece Debugger PIN). Não usar `0.0.0.0`: abriria o servidor também para a VPN Radmin (26.109.226.136).
+- Expo (a partir da raiz): `cmd /c "set REACT_NATIVE_PACKAGER_HOSTNAME=192.168.0.9&& cd mobile && npx.cmd expo start"`. Sem a variável, o QR pode usar o IP da VPN.
+- Ao terminar, voltar o Flask ao modo padrão.
+- Sempre usar `npm.cmd` e `npx.cmd`, e nunca chamar `npx` com nomes vindos de variáveis.
+- Firewall do Windows: duas regras de entrada, perfil Privado, só sub-rede local, criadas pelo usuário como administrador: "DF Resolve - Flask 5000 (rede privada)" e "DF Resolve - Expo Metro 8081 (rede privada)". Para remover (PowerShell de administrador):
+  - `Remove-NetFirewallRule -DisplayName "DF Resolve - Flask 5000 (rede privada)"`
+  - `Remove-NetFirewallRule -DisplayName "DF Resolve - Expo Metro 8081 (rede privada)"`
+
 ### Variáveis de ambiente do backend
 
 - `DF_RESOLVE_SECRET_KEY`: chave da sessão. Sem ela, uma chave temporária é gerada a cada início.
@@ -53,10 +64,19 @@ df_resolve/
   denuncias.db               BANCO LEGADO, não usado pelo código; preservar
 frontend/                    web antigo (login, register, denuncia funcionam; index.html quebrado)
 instance/                    pasta vazia na raiz, sem uso
+mobile/                      app Expo SDK 58, Expo Router, JavaScript
+  app/_layout.js             Stack com título "DF Resolve"
+  app/index.js               tela de teste de conexão (GET /auth/check)
+  services/api.js            URL da API e chamada com tempo limite de 8 s
+  .env.example               modelo versionado
+  .env                       EXPO_PUBLIC_API_URL (não versionado)
 requirements.txt
-.gitignore
+.gitignore                   inclui .vscode/ (configurações locais do editor)
 CLAUDE.md
 ```
+
+- `EXPO_PUBLIC_API_URL` fica embutida no app: nunca colocar segredos em variáveis `EXPO_PUBLIC_*`.
+- Versões no `mobile/package.json`: expo ~58.0.22, react 19.3.0, react-native 0.88.1, expo-router ~58.0.29. Node v22.20.0, npm 10.9.3.
 
 ## Dependências instaladas no venv (verificado)
 
@@ -113,6 +133,10 @@ Todas as respostas de erro usam JSON no formato `{"message": "..."}`.
   - Motivo: cada verificação `scrypt` usa cerca de 32 MB de memória (calculado pelos parâmetros N=32768 e r=8, não medido) e o login leva de 0,16 a 0,20 s (medido com `curl.exe`, tempo total da requisição). Sem limite, tentativas repetidas permitiam adivinhar senhas e sobrecarregar o servidor.
   - Testes L1 a L14, reinício (contadores zeram) e navegador (alert com a mensagem do 429) aprovados.
   - Dado de teste criado: usuário `limite_teste`. Ele permanece no banco em uso e só pode ser removido com autorização do usuário.
+- Fase 3 (esqueleto Expo e conexão pela rede): implementada e testada em 2026-11-03. Commit "feat(mobile): cria app Expo SDK 58 com Expo Router e teste de conexao com a API".
+  - Criado com `create-expo@5.1.6`, template `blank@sdk-58`; `App.js`, `index.js` e `LICENSE` do template removidos. Backend sem alteração.
+  - Testes C1 a C12 aprovados: em modo rede o Flask escuta só em 192.168.0.9, `/console` dá 404, localhost e o IP da VPN não respondem; o celular (Expo Go, Android) mostra 200 com `logged_in: false`, erro sem travar com o Flask desligado, volta ao religar e mostra erro de URL ausente com `EXPO_NO_DOTENV=1`; `/auth/check` não tem limite.
+  - Nenhum dado criado no banco.
 
 ## Problemas conhecidos
 
@@ -121,6 +145,7 @@ Todas as respostas de erro usam JSON no formato `{"message": "..."}`.
 - Não há limite por conta: um ataque distribuído em vários IPs contra uma única conta não é contido.
 - Atrás de um proxy reverso, todos os usuários teriam o IP do proxy. Será preciso `ProxyFix` com o número exato de proxies confiáveis.
 - Com vários processos, cada um tem seus contadores, o que multiplica o limite. Seria preciso um armazenamento compartilhado (Redis).
+- Um app Android instalado bloqueia requisições `http://` por padrão, então a API vai precisar de HTTPS.
 
 ### Demais
 - As 5 contas originais continuam com `sha256` até fazerem login. Werkzeug 3 remove o `sha256`: atualizar antes da conversão impede o login dessas contas.
@@ -129,17 +154,19 @@ Todas as respostas de erro usam JSON no formato `{"message": "..."}`.
 - Login de usuário inexistente responde mais rápido que o de usuário existente. Não é vazamento novo: o cadastro já informa "Usuário já existe".
 - Dependências de 2023 com vulnerabilidades corrigidas em versões posteriores.
 - Aviso do Git `unable to find all commit-graph files`: é só cache; pode ser recriado com `git commit-graph write --reachable` mediante autorização.
+- App mobile, revisar na próxima atualização do SDK do Expo:
+  - `npm ls` acusa `react-dom@19.3.1` exigindo `react@^19.3.1`, mas o SDK 58 fixa `react` em 19.3.0. O react-dom só é usado na versão web (via expo-router); `expo install --check` aprova as versões.
+  - `npm audit` aponta 11 vulnerabilidades moderadas indiretas em ferramentas de desenvolvimento (`glob`, `minimatch`, via `@expo/cli` e `@expo/config`). Não vão para o app. Não usar `npm audit fix`, que mudaria versões fixadas pelo SDK.
 
-## Próxima etapa: Fase 3 (PROPOSTA, aguardando plano)
+## Próxima etapa: Fase 4 (PROPOSTA, aguardando plano)
 
-Esqueleto do app Expo em `mobile/` e teste de conexão com o Flask pela rede Wi-Fi, sem login.
-- O plano precisa garantir que o console de depuração do Flask não fique acessível pela rede. Hoje o `app.py` desliga o debug quando `DF_RESOLVE_HOST` não é local (verificado no código); o plano deve confirmar isso em teste.
+Autenticação por token para o app (detalhes no roadmap). Cria tabela nova: exige backup dos bancos e plano aprovado antes.
 
 ## Roadmap (PROPOSTA)
 
-Decidido: app em `mobile/` neste repositório, navegação com Expo Router. A primeira versão faz só o que o backend já faz (cadastro, login, logout, criar e listar denúncias), sem foto, GPS ou categoria.
+Decidido: app em `mobile/` neste repositório, navegação com Expo Router, JavaScript. A primeira versão faz só o que o backend já faz (cadastro, login, logout, criar e listar denúncias), sem foto, GPS ou categoria.
 
-- Fase 3: esqueleto do app Expo em `mobile/` e teste de conexão com o Flask pela rede Wi-Fi, sem login.
+- Fase 3: esqueleto do app Expo em `mobile/` e teste de conexão com o Flask pela rede Wi-Fi, sem login. Concluída.
 - Fase 4: autenticação por token para o app. Cria tabela nova: exige backup e plano antes. Proposta: token opaco aleatório, salvo como hash em `auth_token` (expiração e revogação), lido por `request_loader` do Flask-Login; rotas `/auth/token`, `/auth/token/revoke`, `/auth/me`; no app, token em `expo-secure-store` (nunca AsyncStorage). O fluxo web por cookie continua igual.
 - Fase 5: telas de cadastro, login e logout.
 - Fase 6: criar e listar denúncias.
@@ -148,9 +175,8 @@ Decidido: app em `mobile/` neste repositório, navegação com Expo Router. A pr
 ## Decisões pendentes do usuário
 
 1. Token opaco (recomendado) ou JWT, para a Fase 4.
-2. JavaScript ou TypeScript no app?
-3. Destino do `index.html`.
-4. Quem altera o status das denúncias (administrador?).
-5. Novos campos para versões futuras: data, categoria, região administrativa, foto, GPS.
-6. Ferramenta de migração (Flask-Migrate ou scripts manuais).
-7. Quando atualizar dependências.
+2. Destino do `index.html`.
+3. Quem altera o status das denúncias (administrador?).
+4. Novos campos para versões futuras: data, categoria, região administrativa, foto, GPS.
+5. Ferramenta de migração (Flask-Migrate ou scripts manuais).
+6. Quando atualizar dependências.
