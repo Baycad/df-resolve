@@ -95,7 +95,7 @@ Todas as respostas de erro usam JSON no formato `{"message": "..."}`.
   - Commit `462d6c8`: 401/400 em JSON, validação de entrada, SECRET_KEY por ambiente, host/porta/debug configuráveis.
   - Push feito: `origin/main` em `462d6c8`.
   - Os bancos continuam no histórico do primeiro commit (`9f2627a`). São dados de teste; o usuário decidiu não reescrever o histórico.
-- Fase 2 (hash de senha): implementada e testada em 2026-11-03, sem commit.
+- Fase 2 (hash de senha): implementada e testada em 2026-11-03. Commit `5708667`.
   - Cadastro com `scrypt`. Login correto com hash antigo converte para `scrypt`; se a gravação falhar, o login continua e a conversão é refeita no próximo acesso (aviso no log, sem hash e sem traceback).
   - Backup antes da fase: `X:\programação\DF-RESOLVE-BACKUPS\2026-10-31-antes-fase2`. A pasta foi criada em 2026-11-03; o nome segue o plano de 2026-10-31 e não deve ser alterado.
   - Testes T1 a T15 aprovados. T15: o banco legado `df_resolve/denuncias.db` tem SHA256 idêntico ao do backup.
@@ -116,9 +116,8 @@ Todas as respostas de erro usam JSON no formato `{"message": "..."}`.
 
 ## Próxima etapa (PROPOSTA, aguardando decisão)
 
-1. Concluir a Fase 2: commit, se o usuário pedir.
-2. Limite de tentativas de login, antes da Fase 3, por ser prioridade alta. A abordagem fica para decidir: Flask-Limiter (nova dependência) ou contador próprio.
-3. Fase 3 (autenticação mobile), conforme o roadmap.
+1. Limite de tentativas de login, antes da Fase 3, por ser prioridade alta. A abordagem fica para decidir: Flask-Limiter (nova dependência) ou contador próprio.
+2. Fase 3 (autenticação mobile), conforme o roadmap.
 
 ## Roadmap (PROPOSTA)
 
