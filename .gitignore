@@ -19,5 +19,8 @@ instance/
 node_modules/
 .expo/
 
+# Configuracoes locais do editor
+.vscode/
+
 # Arquivos de sistema
 desktop.ini
