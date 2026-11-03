@@ -48,6 +48,7 @@ df_resolve/
   models/models.py           User, Denuncia
   routes/auth_routes.py      /auth/*
   routes/denuncia_routes.py  /denuncias/*
+  limiter.py                 Flask-Limiter (limites por IP em /auth/login e /auth/register)
   instance/denuncias.db      BANCO EM USO (não versionado)
   denuncias.db               BANCO LEGADO, não usado pelo código; preservar
 frontend/                    web antigo (login, register, denuncia funcionam; index.html quebrado)
@@ -61,6 +62,7 @@ CLAUDE.md
 
 Flask 2.3.2, Flask-Cors 3.0.10, Flask-Login 0.6.2, Flask-SQLAlchemy 3.0.3, SQLAlchemy 2.0.41 (não fixado no requirements), Werkzeug 2.3.6.
 Não atualizar isoladamente: Werkzeug 3 remove o hash `sha256` e exige Flask-Login 0.6.3 ou superior.
+Flask-Limiter 4.1.1, com dependências fixadas no requirements: limits 5.8.0, ordered-set 4.1.0, Deprecated 1.3.1, wrapt 1.17.3, packaging 26.3. As versões mais novas de Deprecated (3.0.1) e wrapt (2.5.2) tinham menos de uma semana em 2026-11-03.
 
 ## Modelos (verificado)
 
@@ -86,6 +88,12 @@ Todas as respostas de erro usam JSON no formato `{"message": "..."}`.
 - O dono da denúncia vem sempre de `current_user`, nunca do cliente.
 - Não existem rotas de detalhe, edição, exclusão ou alteração de status. O status nunca muda.
 - CORS liberado só para `http://127.0.0.1:5500` (Live Server). O app nativo não depende de CORS.
+- Limites por IP (`request.remote_addr`; `X-Forwarded-For` é ignorado):
+  - POST /auth/login: 5 falhas (401) por minuto e 20 por hora; 30 requisições por minuto no total.
+  - POST /auth/register: 3 por minuto e 10 por hora.
+  - Estourou: 429 com `{"message": "Muitas tentativas. Aguarde um pouco e tente novamente."}` e `Retry-After`.
+  - Nenhuma outra rota é limitada. Preflight OPTIONS não conta.
+- Contadores em memória: zeram ao reiniciar o servidor ou quando o reloader do debug recarrega.
 
 ## Histórico
 
@@ -93,18 +101,26 @@ Todas as respostas de erro usam JSON no formato `{"message": "..."}`.
 - Fase 1 (segurança base): concluída e testada.
   - Commit `7ef47cb`: `.gitignore`, bancos e `.pyc` removidos do versionamento.
   - Commit `462d6c8`: 401/400 em JSON, validação de entrada, SECRET_KEY por ambiente, host/porta/debug configuráveis.
-  - Push feito: `origin/main` em `462d6c8`.
+  - Push da Fase 1 feito (`origin/main` em `462d6c8` na época).
   - Os bancos continuam no histórico do primeiro commit (`9f2627a`). São dados de teste; o usuário decidiu não reescrever o histórico.
 - Fase 2 (hash de senha): implementada e testada em 2026-11-03. Commit `5708667`.
   - Cadastro com `scrypt`. Login correto com hash antigo converte para `scrypt`; se a gravação falhar, o login continua e a conversão é refeita no próximo acesso (aviso no log, sem hash e sem traceback).
   - Backup antes da fase: `X:\programação\DF-RESOLVE-BACKUPS\2026-10-31-antes-fase2`. A pasta foi criada em 2026-11-03; o nome segue o plano de 2026-10-31 e não deve ser alterado.
   - Testes T1 a T15 aprovados. T15: o banco legado `df_resolve/denuncias.db` tem SHA256 idêntico ao do backup.
   - Dados de teste criados: usuários `fase2_legado`, `fase2_legado2`, `fase2_novo` e denúncias 7 e 8. Eles permanecem no banco em uso e só podem ser removidos com autorização do usuário.
+  - Push feito: `origin/main` em `25dd2e4` (inclui `f61d781`, `5708667`, `5c08569` e `25dd2e4`).
+- Limite de tentativas (Flask-Limiter): implementado e testado em 2026-11-03. Commit "feat(auth): limita tentativas de login e cadastro por IP com Flask-Limiter".
+  - Motivo: cada verificação `scrypt` usa cerca de 32 MB de memória (calculado pelos parâmetros N=32768 e r=8, não medido) e o login leva de 0,16 a 0,20 s (medido com `curl.exe`, tempo total da requisição). Sem limite, tentativas repetidas permitiam adivinhar senhas e sobrecarregar o servidor.
+  - Testes L1 a L14, reinício (contadores zeram) e navegador (alert com a mensagem do 429) aprovados.
+  - Dado de teste criado: usuário `limite_teste`. Ele permanece no banco em uso e só pode ser removido com autorização do usuário.
 
 ## Problemas conhecidos
 
-### Prioridade alta
-- Sem limite de tentativas de login. Agravado pela Fase 2: cada verificação `scrypt` usa cerca de 32 MB de memória (calculado pelos parâmetros N=32768 e r=8, não medido) e o login leva de 0,16 a 0,20 s (medido com `curl.exe`, tempo total da requisição em 4 logins de contas `scrypt`; o login com `sha256` levou 0,01 s). Tentativas repetidas permitem tanto adivinhar senhas quanto sobrecarregar o servidor.
+### Antes de produção
+- O limite é por IP. Usuários atrás do mesmo IP (NAT de operadora móvel, escola) dividem a cota e podem ser bloqueados juntos. Rever os valores antes do app entrar em produção.
+- Não há limite por conta: um ataque distribuído em vários IPs contra uma única conta não é contido.
+- Atrás de um proxy reverso, todos os usuários teriam o IP do proxy. Será preciso `ProxyFix` com o número exato de proxies confiáveis.
+- Com vários processos, cada um tem seus contadores, o que multiplica o limite. Seria preciso um armazenamento compartilhado (Redis).
 
 ### Demais
 - As 5 contas originais continuam com `sha256` até fazerem login. Werkzeug 3 remove o `sha256`: atualizar antes da conversão impede o login dessas contas.
@@ -114,26 +130,27 @@ Todas as respostas de erro usam JSON no formato `{"message": "..."}`.
 - Dependências de 2023 com vulnerabilidades corrigidas em versões posteriores.
 - Aviso do Git `unable to find all commit-graph files`: é só cache; pode ser recriado com `git commit-graph write --reachable` mediante autorização.
 
-## Próxima etapa (PROPOSTA, aguardando decisão)
+## Próxima etapa: Fase 3 (PROPOSTA, aguardando plano)
 
-1. Limite de tentativas de login, antes da Fase 3, por ser prioridade alta. A abordagem fica para decidir: Flask-Limiter (nova dependência) ou contador próprio.
-2. Fase 3 (autenticação mobile), conforme o roadmap.
+Esqueleto do app Expo em `mobile/` e teste de conexão com o Flask pela rede Wi-Fi, sem login.
+- O plano precisa garantir que o console de depuração do Flask não fique acessível pela rede. Hoje o `app.py` desliga o debug quando `DF_RESOLVE_HOST` não é local (verificado no código); o plano deve confirmar isso em teste.
 
 ## Roadmap (PROPOSTA)
 
-- Fase 3: autenticação mobile com token opaco aleatório, salvo como hash em nova tabela `auth_token` (expiração e revogação), lido por `request_loader` do Flask-Login. Rotas `/auth/token`, `/auth/token/revoke`, `/auth/me`. O fluxo web por cookie continua igual.
-- Fase 4: `GET /denuncias/<id>` com checagem de dono; POST retornando o objeto criado.
-- Fase 5: app em `mobile/` com Expo, Expo Router, JavaScript, `services/api.js`, `AuthContext`, token em `expo-secure-store` (nunca AsyncStorage), URL da API em `EXPO_PUBLIC_API_URL`.
-- Fases 6 e 7: telas de autenticação e de denúncias, com estados de carregamento, vazio e erro.
+Decidido: app em `mobile/` neste repositório, navegação com Expo Router. A primeira versão faz só o que o backend já faz (cadastro, login, logout, criar e listar denúncias), sem foto, GPS ou categoria.
+
+- Fase 3: esqueleto do app Expo em `mobile/` e teste de conexão com o Flask pela rede Wi-Fi, sem login.
+- Fase 4: autenticação por token para o app. Cria tabela nova: exige backup e plano antes. Proposta: token opaco aleatório, salvo como hash em `auth_token` (expiração e revogação), lido por `request_loader` do Flask-Login; rotas `/auth/token`, `/auth/token/revoke`, `/auth/me`; no app, token em `expo-secure-store` (nunca AsyncStorage). O fluxo web por cookie continua igual.
+- Fase 5: telas de cadastro, login e logout.
+- Fase 6: criar e listar denúncias.
+- Fase 7: detalhes (`GET /denuncias/<id>` com checagem de dono), estados de carregamento, vazio e erro, e acabamento.
 
 ## Decisões pendentes do usuário
 
-1. Como implementar o limite de tentativas de login (Flask-Limiter ou contador próprio) e se ele vem antes da Fase 3.
-2. Mobile em `mobile/` neste repositório?
-3. Token opaco (recomendado) ou JWT?
-4. Expo Router + JavaScript?
-5. Destino do `index.html`.
-6. Quem altera o status das denúncias (administrador?).
-7. Novos campos: data, categoria, região administrativa, foto, GPS.
-8. Ferramenta de migração (Flask-Migrate ou scripts manuais).
-9. Quando atualizar dependências.
+1. Token opaco (recomendado) ou JWT, para a Fase 4.
+2. JavaScript ou TypeScript no app?
+3. Destino do `index.html`.
+4. Quem altera o status das denúncias (administrador?).
+5. Novos campos para versões futuras: data, categoria, região administrativa, foto, GPS.
+6. Ferramenta de migração (Flask-Migrate ou scripts manuais).
+7. Quando atualizar dependências.
