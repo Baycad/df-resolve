@@ -34,6 +34,9 @@ Repositório público: https://github.com/Baycad/df-resolve (branch `main`).
 - No PowerShell, JSON com aspas deve ir por arquivo temporário em `$env:TEMP` com `--data-binary "@arquivo"`.
 - Backups dos bancos: `X:\programação\DF-RESOLVE-BACKUPS\<pasta-nova>`. Nunca sobrescrever um backup existente.
 - A pasta de backups só aceita escrita como administrador. O backup é feito pelo usuário em PowerShell de administrador.
+- Scripts Python que precisem de aspas vão em arquivo `.py` no scratchpad, executados com `.\venv\Scripts\python.exe -I`. Nunca `python -c` no PowerShell, que desmonta as aspas.
+- Funções auxiliares no PowerShell não podem ter nome igual a um apelido embutido (por exemplo, `R` é apelido de `Invoke-History`).
+- Durante uma bateria de testes, o usuário não usa o site em paralelo sem avisar antes.
 
 ### Modo rede (testes com celular)
 
@@ -59,7 +62,8 @@ df_resolve/
   models/models.py           User, Denuncia
   routes/auth_routes.py      /auth/*
   routes/denuncia_routes.py  /denuncias/*
-  limiter.py                 Flask-Limiter (limites por IP em /auth/login e /auth/register)
+  limiter.py                 Flask-Limiter (limites por IP em /auth/login, /auth/token e /auth/register)
+  auth_tokens.py             tokens do app: emissão, leitura do Bearer, revogação
   instance/denuncias.db      BANCO EM USO (não versionado)
   denuncias.db               BANCO LEGADO, não usado pelo código; preservar
 frontend/                    web antigo (login, register, denuncia funcionam; index.html quebrado)
@@ -89,6 +93,7 @@ Flask-Limiter 4.1.1, com dependências fixadas no requirements: limits 5.8.0, or
 - `User`: id, username (String 80, único), password (String 255 no modelo, hash `scrypt`).
   O banco em uso foi criado com VARCHAR(120); o SQLite não impõe o tamanho e grava hashes de 162 caracteres (testado). Outro banco exigiria migração.
 - `Denuncia`: id, titulo (100), descricao (Text), endereco (200), status (padrão "Pendente"), user_id (FK user.id).
+- `AuthToken` (tabela `auth_token`): id, token_hash (String 64, único, SHA-256 em hex), user_id (FK user.id, com índice), created_at, expires_at, revoked_at (vazio enquanto ativo). Datas em UTC sem fuso. O token em texto nunca é gravado.
 - Não existem: data de criação, categoria, foto, localização, papel de administrador.
 
 ## API atual (verificado e testado)
@@ -103,13 +108,19 @@ Todas as respostas de erro usam JSON no formato `{"message": "..."}`.
 | GET | /auth/check | não | |
 | POST | /denuncias/ | sim | titulo (até 100), descricao (até 2000), endereco (até 200) |
 | GET | /denuncias/ | sim | lista apenas as denúncias do usuário logado |
+| POST | /auth/token | não | username, password. 200 com `token`, `token_type: Bearer` e `expires_at` (30 dias), `Cache-Control: no-store`. Não cria cookie |
+| POST | /auth/token/revoke | Bearer | revoga o token enviado; inválido, expirado ou revogado: 401 |
+| GET | /auth/me | sim | `{id, username}` |
 
+- "Auth sim" aceita cookie de sessão ou `Authorization: Bearer <token>` (pelo `request_loader`). Com os dois, vale a sessão.
+- O token só é aceito no cabeçalho, nunca na URL. Cabeçalho malformado é tratado como ausente (401). `/auth/check` também reconhece o Bearer. `POST /auth/logout` com Bearer revoga o token.
+- Token: 43 caracteres (`secrets.token_urlsafe(32)`); no banco só o SHA-256.
 - Sem login: 401 JSON. Corpo inválido: 400 JSON. Erro inesperado: 500 JSON, com traceback no terminal.
 - O dono da denúncia vem sempre de `current_user`, nunca do cliente.
 - Não existem rotas de detalhe, edição, exclusão ou alteração de status. O status nunca muda.
 - CORS liberado só para `http://127.0.0.1:5500` (Live Server). O app nativo não depende de CORS.
 - Limites por IP (`request.remote_addr`; `X-Forwarded-For` é ignorado):
-  - POST /auth/login: 5 falhas (401) por minuto e 20 por hora; 30 requisições por minuto no total.
+  - POST /auth/login e POST /auth/token, com contadores compartilhados (`shared_limit`, escopos `login_total` e `login_falhas`): 5 falhas (401) por minuto e 20 por hora; 30 requisições por minuto no total.
   - POST /auth/register: 3 por minuto e 10 por hora.
   - Estourou: 429 com `{"message": "Muitas tentativas. Aguarde um pouco e tente novamente."}` e `Retry-After`.
   - Nenhuma outra rota é limitada. Preflight OPTIONS não conta.
@@ -137,6 +148,12 @@ Todas as respostas de erro usam JSON no formato `{"message": "..."}`.
   - Criado com `create-expo@5.1.6`, template `blank@sdk-58`; `App.js`, `index.js` e `LICENSE` do template removidos. Backend sem alteração.
   - Testes C1 a C12 aprovados: em modo rede o Flask escuta só em 192.168.0.9, `/console` dá 404, localhost e o IP da VPN não respondem; o celular (Expo Go, Android) mostra 200 com `logged_in: false`, erro sem travar com o Flask desligado, volta ao religar e mostra erro de URL ausente com `EXPO_NO_DOTENV=1`; `/auth/check` não tem limite.
   - Nenhum dado criado no banco.
+- Fase 4 (autenticação por token opaco): implementada e testada em 2026-11-04 e 2026-11-05. Commit "feat(auth): adiciona autenticacao por token opaco para o app mobile".
+  - Backup antes da fase: `X:\programação\DF-RESOLVE-BACKUPS\2026-11-04-antes-fase4`.
+  - Tabela `auth_token` criada pelo `db.create_all()`, ensaiado antes numa cópia (só `CREATE TABLE` e `CREATE INDEX`).
+  - Testes M1, M2, R0, F1 a F17 e F14b aprovados. A busca no log não verificou os cookies de sessão (o curl apagou os valores no logout).
+  - Dados de teste criados: usuário `fase4_teste`; denúncias 9 e 11 (de `fase4_teste`) e 10 (da conta `teste_fase2`, do usuário); 4 linhas em `auth_token`, todas de `fase4_teste`, revogadas ou expiradas (a linha 3 teve o `expires_at` alterado à mão no F9). Só podem ser removidos com autorização do usuário.
+  - A conta `teste_fase2` foi convertida para scrypt no login pelo navegador.
 
 ## Problemas conhecidos
 
@@ -146,11 +163,14 @@ Todas as respostas de erro usam JSON no formato `{"message": "..."}`.
 - Atrás de um proxy reverso, todos os usuários teriam o IP do proxy. Será preciso `ProxyFix` com o número exato de proxies confiáveis.
 - Com vários processos, cada um tem seus contadores, o que multiplica o limite. Seria preciso um armazenamento compartilhado (Redis).
 - Um app Android instalado bloqueia requisições `http://` por padrão, então a API vai precisar de HTTPS.
+- Tokens vencidos e revogados ficam acumulados em `auth_token` (não há limpeza).
+- Não existe "sair de todos os aparelhos" nem limite de tokens ativos por usuário.
 
 ### Demais
-- As 5 contas originais continuam com `sha256` até fazerem login. Werkzeug 3 remove o `sha256`: atualizar antes da conversão impede o login dessas contas.
+- 4 contas continuam com `sha256` até fazerem login. Werkzeug 3 remove o `sha256`: atualizar antes da conversão impede o login dessas contas.
 - `frontend/index.html` é de uma versão antiga do backend (pede e-mail, aponta para `app.js` inexistente) e é servido em `/`.
 - `frontend/js/denuncia.js` não trata 401 quando o usuário não está logado.
+- O botão Sair de `frontend/js/denuncia.js` redireciona para o login sem olhar a resposta do servidor.
 - Login de usuário inexistente responde mais rápido que o de usuário existente. Não é vazamento novo: o cadastro já informa "Usuário já existe".
 - Dependências de 2023 com vulnerabilidades corrigidas em versões posteriores.
 - Aviso do Git `unable to find all commit-graph files`: é só cache; pode ser recriado com `git commit-graph write --reachable` mediante autorização.
@@ -158,25 +178,24 @@ Todas as respostas de erro usam JSON no formato `{"message": "..."}`.
   - `npm ls` acusa `react-dom@19.3.1` exigindo `react@^19.3.1`, mas o SDK 58 fixa `react` em 19.3.0. O react-dom só é usado na versão web (via expo-router); `expo install --check` aprova as versões.
   - `npm audit` aponta 11 vulnerabilidades moderadas indiretas em ferramentas de desenvolvimento (`glob`, `minimatch`, via `@expo/cli` e `@expo/config`). Não vão para o app. Não usar `npm audit fix`, que mudaria versões fixadas pelo SDK.
 
-## Próxima etapa: Fase 4 (PROPOSTA, aguardando plano)
+## Próxima etapa: Fase 5 (PROPOSTA, aguardando plano)
 
-Autenticação por token para o app (detalhes no roadmap). Cria tabela nova: exige backup dos bancos e plano aprovado antes.
+Telas de cadastro, login e logout no app, com o token guardado no `expo-secure-store` (nunca AsyncStorage).
 
 ## Roadmap (PROPOSTA)
 
-Decidido: app em `mobile/` neste repositório, navegação com Expo Router, JavaScript. A primeira versão faz só o que o backend já faz (cadastro, login, logout, criar e listar denúncias), sem foto, GPS ou categoria.
+Decidido: app em `mobile/` neste repositório, navegação com Expo Router, JavaScript, token opaco. A primeira versão faz só o que o backend já faz (cadastro, login, logout, criar e listar denúncias), sem foto, GPS ou categoria.
 
 - Fase 3: esqueleto do app Expo em `mobile/` e teste de conexão com o Flask pela rede Wi-Fi, sem login. Concluída.
-- Fase 4: autenticação por token para o app. Cria tabela nova: exige backup e plano antes. Proposta: token opaco aleatório, salvo como hash em `auth_token` (expiração e revogação), lido por `request_loader` do Flask-Login; rotas `/auth/token`, `/auth/token/revoke`, `/auth/me`; no app, token em `expo-secure-store` (nunca AsyncStorage). O fluxo web por cookie continua igual.
+- Fase 4: autenticação por token para o app. Cria tabela nova: exige backup e plano antes. Proposta: token opaco aleatório, salvo como hash em `auth_token` (expiração e revogação), lido por `request_loader` do Flask-Login; rotas `/auth/token`, `/auth/token/revoke`, `/auth/me`; no app, token em `expo-secure-store` (nunca AsyncStorage). O fluxo web por cookie continua igual. Concluída.
 - Fase 5: telas de cadastro, login e logout.
 - Fase 6: criar e listar denúncias.
 - Fase 7: detalhes (`GET /denuncias/<id>` com checagem de dono), estados de carregamento, vazio e erro, e acabamento.
 
 ## Decisões pendentes do usuário
 
-1. Token opaco (recomendado) ou JWT, para a Fase 4.
-2. Destino do `index.html`.
-3. Quem altera o status das denúncias (administrador?).
-4. Novos campos para versões futuras: data, categoria, região administrativa, foto, GPS.
-5. Ferramenta de migração (Flask-Migrate ou scripts manuais).
-6. Quando atualizar dependências.
+1. Destino do `index.html`: ele é servido em `/` e confunde quem abre a raiz.
+2. Quem altera o status das denúncias (administrador?).
+3. Novos campos para versões futuras: data, categoria, região administrativa, foto, GPS.
+4. Ferramenta de migração (Flask-Migrate ou scripts manuais).
+5. Quando atualizar dependências.
