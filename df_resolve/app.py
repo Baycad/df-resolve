@@ -9,6 +9,7 @@ from werkzeug.exceptions import HTTPException
 from df_resolve.models.models import db, User
 from df_resolve.routes import denuncia_routes, auth_routes
 from df_resolve.limiter import limiter
+from df_resolve import auth_tokens
 
 app = Flask(__name__, static_folder="../frontend", static_url_path="/")
 
@@ -65,6 +66,12 @@ def load_user(user_id):
         return db.session.get(User, int(user_id))
     except (TypeError, ValueError):
         return None
+
+
+@login_manager.request_loader
+def load_user_from_request(req):
+    # App mobile: "Authorization: Bearer <token>". Só é chamado quando não há sessão por cookie.
+    return auth_tokens.usuario_do_token(req)
 
 
 @login_manager.unauthorized_handler

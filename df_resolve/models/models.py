@@ -15,3 +15,13 @@ class Denuncia(db.Model):
     endereco = db.Column(db.String(200), nullable=False)
     status = db.Column(db.String(50), default='Pendente')
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+
+class AuthToken(db.Model):
+    # Tokens do app mobile. Guarda só o hash; o token em texto nunca vai para o banco.
+    __tablename__ = 'auth_token'
+    id = db.Column(db.Integer, primary_key=True)
+    token_hash = db.Column(db.String(64), unique=True, nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    created_at = db.Column(db.DateTime, nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    revoked_at = db.Column(db.DateTime, nullable=True)

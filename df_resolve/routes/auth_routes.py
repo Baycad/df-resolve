@@ -7,6 +7,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 from df_resolve.models.models import db, User
 from df_resolve.limiter import limiter
+from df_resolve import auth_tokens
 
 bp = Blueprint('auth', __name__, url_prefix='/auth')
 
@@ -93,13 +94,11 @@ def register():
     return jsonify({'message': 'Usuário registrado com sucesso'}), 201
 
 
-@bp.route('/login', methods=['POST'])
-@limiter.limit(LIMITE_LOGIN_TOTAL, methods=['POST'])
-@limiter.limit(LIMITE_LOGIN_FALHAS, methods=['POST'], deduct_when=_login_falhou)
-def login():
+def _verificar_credenciais():
+    """Valida usuário e senha do corpo. Retorna (user, None) ou (None, resposta de erro)."""
     dados = _ler_json()
     if dados is None:
-        return _erro('Envie os dados em formato JSON.')
+        return None, _erro('Envie os dados em formato JSON.')
 
     username = dados.get('username')
     password = dados.get('password')
@@ -110,26 +109,76 @@ def login():
         or not username.strip()
         or not password
     ):
-        return _erro('Usuário e senha são obrigatórios.')
+        return None, _erro('Usuário e senha são obrigatórios.')
 
     if len(username) > LOGIN_LIMITE or len(password) > LOGIN_LIMITE:
-        return _erro('Credenciais inválidas', 401)
+        return None, _erro('Credenciais inválidas', 401)
 
     user = User.query.filter_by(username=username.strip()).first()
 
     if not user or not check_password_hash(user.password, password):
-        return _erro('Credenciais inválidas', 401)
+        return None, _erro('Credenciais inválidas', 401)
 
     _atualizar_hash_antigo(user, password)
+    return user, None
+
+
+# Os contadores são compartilhados: falhas em /auth/login e /auth/token somam no mesmo limite.
+limite_login_total = limiter.shared_limit(LIMITE_LOGIN_TOTAL, scope='login_total', methods=['POST'])
+limite_login_falhas = limiter.shared_limit(
+    LIMITE_LOGIN_FALHAS, scope='login_falhas', methods=['POST'], deduct_when=_login_falhou
+)
+
+
+@bp.route('/login', methods=['POST'])
+@limite_login_total
+@limite_login_falhas
+def login():
+    user, erro = _verificar_credenciais()
+    if erro:
+        return erro
     login_user(user)
     return jsonify({'message': 'Login bem-sucedido'}), 200
+
+
+@bp.route('/token', methods=['POST'])
+@limite_login_total
+@limite_login_falhas
+def emitir_token():
+    # Login do app: devolve um token e não cria sessão (não chama login_user).
+    user, erro = _verificar_credenciais()
+    if erro:
+        return erro
+    token, expira = auth_tokens.emitir_token(user)
+    resposta = jsonify({
+        'token': token,
+        'token_type': 'Bearer',
+        'expires_at': expira.isoformat(timespec='seconds') + 'Z',
+    })
+    resposta.headers['Cache-Control'] = 'no-store'
+    return resposta, 200
+
+
+@bp.route('/token/revoke', methods=['POST'])
+def revogar_token():
+    if not auth_tokens.revogar_token(request):
+        return _erro('Token inválido ou expirado.', 401)
+    return jsonify({'message': 'Token revogado'}), 200
 
 
 @bp.route('/logout', methods=['POST'])
 @login_required
 def logout():
+    # Se veio do app, o token também deixa de valer.
+    auth_tokens.revogar_token(request)
     logout_user()
     return jsonify({'message': 'Logout bem-sucedido'}), 200
+
+
+@bp.route('/me', methods=['GET'])
+@login_required
+def me():
+    return jsonify({'id': current_user.id, 'username': current_user.username})
 
 
 @bp.route('/check', methods=['GET'])
