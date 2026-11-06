@@ -34,11 +34,13 @@ export function Tela({ children }) {
 }
 
 // React 19: "ref" chega como prop comum.
-export function Campo({ rotulo, ref, ...props }) {
+// "ajuda" mostra um texto curto abaixo do campo; "estilo" complementa o estilo da entrada.
+export function Campo({ rotulo, ref, ajuda, estilo, ...props }) {
   return (
     <View style={styles.campo}>
       <Text style={styles.rotulo}>{rotulo}</Text>
-      <TextInput ref={ref} style={styles.entrada} placeholderTextColor={cores.suave} {...props} />
+      <TextInput ref={ref} style={[styles.entrada, estilo]} placeholderTextColor={cores.suave} {...props} />
+      {ajuda ? <Text style={styles.ajuda}>{ajuda}</Text> : null}
     </View>
   );
 }
@@ -81,6 +83,7 @@ const styles = StyleSheet.create({
   tela: { flexGrow: 1, justifyContent: 'center', padding: 24, gap: 16 },
   campo: { gap: 6 },
   rotulo: { fontSize: 14, fontWeight: '600', color: cores.texto },
+  ajuda: { fontSize: 12, color: cores.suave, textAlign: 'right' },
   entrada: {
     borderWidth: 1,
     borderColor: cores.borda,

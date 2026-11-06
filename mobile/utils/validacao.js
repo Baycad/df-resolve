@@ -8,7 +8,7 @@ export const SENHA_MAX = 128;
 
 // O Python conta caracteres; o JavaScript conta unidades UTF-16 (um emoji vale 2).
 // [...texto] conta como o Python.
-function tamanho(texto) {
+export function tamanho(texto) {
   return [...texto].length;
 }
 
@@ -33,6 +33,24 @@ export function validarCadastro(usuario, senha, confirmacao) {
 export function validarLogin(usuario, senha) {
   if (!usuario.trim() || !senha) {
     return 'Usuário e senha são obrigatórios.';
+  }
+  return null;
+}
+
+// Limites copiados de df_resolve/routes/denuncia_routes.py (CAMPOS_DENUNCIA, linhas 9 a 13).
+// A ordem aqui é a da tela (título, endereço, descrição), para o erro apontar o primeiro campo vazio.
+export const CAMPOS_DENUNCIA = {
+  titulo: { nome: 'título', limite: 100 },
+  endereco: { nome: 'endereço', limite: 200 },
+  descricao: { nome: 'descrição', limite: 2000 },
+};
+
+// Mesmas mensagens do POST /denuncias/ no servidor.
+export function validarDenuncia(valores) {
+  for (const [campo, { nome, limite }] of Object.entries(CAMPOS_DENUNCIA)) {
+    const valor = (valores[campo] ?? '').trim();
+    if (!valor) return `O campo ${nome} é obrigatório.`;
+    if (tamanho(valor) > limite) return `O campo ${nome} deve ter no máximo ${limite} caracteres.`;
   }
   return null;
 }

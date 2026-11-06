@@ -89,6 +89,7 @@ export const api = {
     requisicao('/auth/token/revoke', { metodo: 'POST', token, tempoLimiteMs: TEMPO_LIMITE_LOGOUT_MS }),
   eu: (token) => requisicao('/auth/me', { token }),
   listarDenuncias: (token) => requisicao('/denuncias/', { token }),
+  criarDenuncia: (token, dados) => requisicao('/denuncias/', { metodo: 'POST', token, corpo: dados }),
   verificarConexao: async () => {
     const inicio = Date.now();
     const dados = await requisicao('/auth/check');
