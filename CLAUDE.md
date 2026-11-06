@@ -37,12 +37,16 @@ Repositório público: https://github.com/Baycad/df-resolve (branch `main`).
 - Scripts Python que precisem de aspas vão em arquivo `.py` no scratchpad, executados com `.\venv\Scripts\python.exe -I`. Nunca `python -c` no PowerShell, que desmonta as aspas.
 - Funções auxiliares no PowerShell não podem ter nome igual a um apelido embutido (por exemplo, `R` é apelido de `Invoke-History`).
 - Durante uma bateria de testes, o usuário não usa o site em paralelo sem avisar antes.
+- Comandos que dependem de pasta usam caminho absoluto: `cmd /c "cd /d <caminho> && ..."`. Quando for preciso trocar de pasta no PowerShell, o comando seguinte vai dentro de `if ($?) { ... }`, para não rodar se a troca falhar.
+- Antes de qualquer `npm`/`npx` no app, conferir que `X:\programação\DF-RESOLVE-BACKEND\mobile\package.json` tem `"name": "mobile"`.
+- Testes com log: Flask com `-u` e `>> "%TEMP%\<arquivo>.log" 2>&1`; Metro com `>>`. Sem terminal interativo, o projeto é aberto pelo "Recently opened" do Expo Go ou por `exp://192.168.0.9:8081`.
 
 ### Modo rede (testes com celular)
 
 - O IP `192.168.0.9` vem do DHCP do roteador e pode mudar. Antes de cada teste, conferir com `ipconfig` (adaptador Ethernet). Se mudar, atualizar o `mobile/.env` e os dois comandos abaixo.
 - Flask (a partir da raiz): `cmd /c "set DF_RESOLVE_HOST=192.168.0.9&& .\venv\Scripts\python.exe -m df_resolve.app"`. O debug desliga sozinho (aparece o aviso e não aparece Debugger PIN). Não usar `0.0.0.0`: abriria o servidor também para a VPN Radmin (26.109.226.136).
 - Expo (a partir da raiz): `cmd /c "set REACT_NATIVE_PACKAGER_HOSTNAME=192.168.0.9&& cd mobile && npx.cmd expo start"`. Sem a variável, o QR pode usar o IP da VPN.
+- O Metro escuta em todas as interfaces (`0.0.0.0:8081`), inclusive a da VPN Radmin; a variável acima só define o endereço do QR. A VPN está no perfil Público e a regra de firewall da 8081 vale só para o perfil Privado e a sub-rede local, então pela VPN a porta deve estar bloqueada. NÃO VERIFICADO.
 - Ao terminar, voltar o Flask ao modo padrão.
 - Sempre usar `npm.cmd` e `npx.cmd`, e nunca chamar `npx` com nomes vindos de variáveis.
 - Firewall do Windows: duas regras de entrada, perfil Privado, só sub-rede local, criadas pelo usuário como administrador: "DF Resolve - Flask 5000 (rede privada)" e "DF Resolve - Expo Metro 8081 (rede privada)". Para remover (PowerShell de administrador):
@@ -69,9 +73,17 @@ df_resolve/
 frontend/                    web antigo (login, register, denuncia funcionam; index.html quebrado)
 instance/                    pasta vazia na raiz, sem uso
 mobile/                      app Expo SDK 58, Expo Router, JavaScript
-  app/_layout.js             Stack com título "DF Resolve"
-  app/index.js               tela de teste de conexão (GET /auth/check)
-  services/api.js            URL da API e chamada com tempo limite de 8 s
+  app/_layout.js             SessaoProvider, splash e Stack.Protected
+  app/(app)/_layout.js       Stack logado, com botão Sair
+  app/(app)/index.js         Minhas Denúncias (rota "/")
+  app/login.js               login por POST /auth/token
+  app/cadastro.js            cadastro com confirmação de senha e login automático
+  app/diagnostico.js         teste de conexão (GET /auth/check), sem login
+  components/ui.js           Tela, Campo, Botao, Link, Mensagem
+  components/BotaoSair.js
+  contexts/sessao.js         sessão; token só em memória e no expo-secure-store
+  services/api.js            requisições, Bearer, tempo limite (8 s; 5 s no logout), erros
+  utils/validacao.js         regras copiadas de auth_routes.py
   .env.example               modelo versionado
   .env                       EXPO_PUBLIC_API_URL (não versionado)
 requirements.txt
@@ -80,7 +92,7 @@ CLAUDE.md
 ```
 
 - `EXPO_PUBLIC_API_URL` fica embutida no app: nunca colocar segredos em variáveis `EXPO_PUBLIC_*`.
-- Versões no `mobile/package.json`: expo ~58.0.22, react 19.3.0, react-native 0.88.1, expo-router ~58.0.29. Node v22.20.0, npm 10.9.3.
+- Versões no `mobile/package.json`: expo ~58.0.22, react 19.3.0, react-dom 19.3.0, react-native 0.88.1, expo-router ~58.0.29, expo-secure-store ~58.0.2. Node v22.20.0, npm 10.9.3.
 
 ## Dependências instaladas no venv (verificado)
 
@@ -154,6 +166,14 @@ Todas as respostas de erro usam JSON no formato `{"message": "..."}`.
   - Testes M1, M2, R0, F1 a F17 e F14b aprovados. A busca no log não verificou os cookies de sessão (o curl apagou os valores no logout).
   - Dados de teste criados: usuário `fase4_teste`; denúncias 9 e 11 (de `fase4_teste`) e 10 (da conta `teste_fase2`, do usuário); 4 linhas em `auth_token`, todas de `fase4_teste`, revogadas ou expiradas (a linha 3 teve o `expires_at` alterado à mão no F9). Só podem ser removidos com autorização do usuário.
   - A conta `teste_fase2` foi convertida para scrypt no login pelo navegador.
+- Fase 5 (cadastro, login e logout no app): implementada e testada em 2026-11-05 e 2026-11-06. Commit `603197c`.
+  - Backup antes da fase: `X:\programação\DF-RESOLVE-BACKUPS\2026-11-05-antes-fase5`. Backend e banco sem alteração de código ou esquema.
+  - Incidente: a primeira instalação do `expo-secure-store` rodou dentro de `mobile\node_modules\expo-router`, porque a troca de pasta falhou. O `mobile\node_modules` foi recriado com `npm ci` a partir do lockfile; nenhum arquivo versionado foi afetado.
+  - O `react-dom` foi alinhado a 19.3.0 (versão do SDK), o que eliminou o conflito do `npm ls` e a necessidade do `--legacy-peer-deps`.
+  - Testes P1 a P3, T1 a T20, T17b, T10r e T17r aprovados.
+  - Lacuna: no bloco D, dois inícios do Flask não aparecem no log; o T15b foi aprovado só pela tela, e o T20 não cobre a saída desses dois processos.
+  - Dados de teste criados: usuário `fase5_teste`; tokens ids 6 e 8 a 13 (`fase5_teste`) e 5 e 7 (`teste_fase2`), todos revogados (ids 8, 9, 10, 11 e 13 revogados por script, com autorização). Só podem ser removidos com autorização do usuário.
+  - A conta `fase4_teste` não serve mais para testes de login: a senha foi apagada na limpeza da Fase 4.
 
 ## Problemas conhecidos
 
@@ -165,6 +185,8 @@ Todas as respostas de erro usam JSON no formato `{"message": "..."}`.
 - Um app Android instalado bloqueia requisições `http://` por padrão, então a API vai precisar de HTTPS.
 - Tokens vencidos e revogados ficam acumulados em `auth_token` (não há limpeza).
 - Não existe "sair de todos os aparelhos" nem limite de tokens ativos por usuário.
+- Logout sem rede: o token é apagado do aparelho, mas continua ativo no servidor até expirar (30 dias).
+- Caso das 10:29:53 de 2026-11-06, NÃO EXPLICADO: depois de um Sair sem rede (T17), o app abriu com um token ainda salvo. Não se repetiu no T17b nem no T17r. Desde então, o `apagarToken` confere a remoção, tenta de novo e avisa se falhar; o caminho de falha desse reforço está NÃO TESTADO (não dá para provocar a falha no aparelho).
 
 ### Demais
 - 4 contas continuam com `sha256` até fazerem login. Werkzeug 3 remove o `sha256`: atualizar antes da conversão impede o login dessas contas.
@@ -175,12 +197,12 @@ Todas as respostas de erro usam JSON no formato `{"message": "..."}`.
 - Dependências de 2023 com vulnerabilidades corrigidas em versões posteriores.
 - Aviso do Git `unable to find all commit-graph files`: é só cache; pode ser recriado com `git commit-graph write --reachable` mediante autorização.
 - App mobile, revisar na próxima atualização do SDK do Expo:
-  - `npm ls` acusa `react-dom@19.3.1` exigindo `react@^19.3.1`, mas o SDK 58 fixa `react` em 19.3.0. O react-dom só é usado na versão web (via expo-router); `expo install --check` aprova as versões.
-  - `npm audit` aponta 11 vulnerabilidades moderadas indiretas em ferramentas de desenvolvimento (`glob`, `minimatch`, via `@expo/cli` e `@expo/config`). Não vão para o app. Não usar `npm audit fix`, que mudaria versões fixadas pelo SDK.
+  - `npm audit` aponta 8 vulnerabilidades moderadas indiretas em ferramentas de desenvolvimento (eram 11; a causa da mudança não foi investigada). Não vão para o app. Não usar `npm audit fix`, que mudaria versões fixadas pelo SDK.
+- As mensagens de erro do app usam termos técnicos ("Flask", "modo rede"). Revisar na Fase 7.
 
-## Próxima etapa: Fase 5 (PROPOSTA, aguardando plano)
+## Próxima etapa: Fase 6 (PROPOSTA, aguardando plano)
 
-Telas de cadastro, login e logout no app, com o token guardado no `expo-secure-store` (nunca AsyncStorage).
+Criar e listar denúncias no app.
 
 ## Roadmap (PROPOSTA)
 
@@ -188,7 +210,7 @@ Decidido: app em `mobile/` neste repositório, navegação com Expo Router, Java
 
 - Fase 3: esqueleto do app Expo em `mobile/` e teste de conexão com o Flask pela rede Wi-Fi, sem login. Concluída.
 - Fase 4: autenticação por token para o app. Cria tabela nova: exige backup e plano antes. Proposta: token opaco aleatório, salvo como hash em `auth_token` (expiração e revogação), lido por `request_loader` do Flask-Login; rotas `/auth/token`, `/auth/token/revoke`, `/auth/me`; no app, token em `expo-secure-store` (nunca AsyncStorage). O fluxo web por cookie continua igual. Concluída.
-- Fase 5: telas de cadastro, login e logout.
+- Fase 5: telas de cadastro, login e logout. Concluída.
 - Fase 6: criar e listar denúncias.
 - Fase 7: detalhes (`GET /denuncias/<id>` com checagem de dono), estados de carregamento, vazio e erro, e acabamento.
 
@@ -198,4 +220,4 @@ Decidido: app em `mobile/` neste repositório, navegação com Expo Router, Java
 2. Quem altera o status das denúncias (administrador?).
 3. Novos campos para versões futuras: data, categoria, região administrativa, foto, GPS.
 4. Ferramenta de migração (Flask-Migrate ou scripts manuais).
-5. Quando atualizar dependências.
+5. Quando atualizar dependências. O `expo install --check` aponta 5 patches do SDK 58: `expo` 58.0.23, `expo-constants` 58.0.15, `expo-linking` 58.0.16, `expo-router` 58.0.30 e `react-native-safe-area-context` 5.11.1.
