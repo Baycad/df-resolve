@@ -45,11 +45,13 @@ export const CAMPOS_DENUNCIA = {
   descricao: { nome: 'descrição', limite: 2000 },
 };
 
-// Mesmas mensagens do POST /denuncias/ no servidor.
-export function validarDenuncia(valores) {
+// Mesmas mensagens do servidor. No cadastro os três campos são obrigatórios;
+// na edição ({ edicao: true }) só os campos enviados são conferidos, como no PATCH.
+export function validarDenuncia(valores, { edicao = false } = {}) {
   for (const [campo, { nome, limite }] of Object.entries(CAMPOS_DENUNCIA)) {
+    if (edicao && !(campo in valores)) continue;
     const valor = (valores[campo] ?? '').trim();
-    if (!valor) return `O campo ${nome} é obrigatório.`;
+    if (!valor) return edicao ? `O campo ${nome} não pode ficar vazio.` : `O campo ${nome} é obrigatório.`;
     if (tamanho(valor) > limite) return `O campo ${nome} deve ter no máximo ${limite} caracteres.`;
   }
   return null;

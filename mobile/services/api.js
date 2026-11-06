@@ -90,6 +90,10 @@ export const api = {
   eu: (token) => requisicao('/auth/me', { token }),
   listarDenuncias: (token) => requisicao('/denuncias/', { token }),
   criarDenuncia: (token, dados) => requisicao('/denuncias/', { metodo: 'POST', token, corpo: dados }),
+  detalharDenuncia: (token, id) => requisicao(`/denuncias/${encodeURIComponent(id)}`, { token }),
+  editarDenuncia: (token, id, campos) =>
+    requisicao(`/denuncias/${encodeURIComponent(id)}`, { metodo: 'PATCH', token, corpo: campos }),
+  excluirDenuncia: (token, id) => requisicao(`/denuncias/${encodeURIComponent(id)}`, { metodo: 'DELETE', token }),
   verificarConexao: async () => {
     const inicio = Date.now();
     const dados = await requisicao('/auth/check');

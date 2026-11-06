@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 
 import { Botao, cores, Mensagem } from '../../components/ui';
@@ -80,12 +80,17 @@ export default function MinhasDenuncias() {
       }
       ListEmptyComponent={<Text style={styles.vazio}>Você ainda não tem denúncias registradas.</Text>}
       renderItem={({ item }) => (
-        <View style={styles.cartao}>
+        <Pressable
+          onPress={() => router.push({ pathname: '/denuncia/[id]', params: { id: String(item.id) } })}
+          accessibilityRole="button"
+          accessibilityHint="Abre a denúncia para ver, editar ou excluir"
+          style={({ pressed }) => [styles.cartao, pressed && styles.cartaoPressionado]}
+        >
           <Text style={styles.titulo}>{item.titulo}</Text>
           <Text style={styles.suave}>{item.endereco}</Text>
           <Text numberOfLines={3}>{item.descricao}</Text>
           <Text style={styles.status}>{item.status}</Text>
-        </View>
+        </Pressable>
       )}
     />
   );
@@ -98,6 +103,7 @@ const styles = StyleSheet.create({
   lista: { padding: 16, gap: 12, flexGrow: 1 },
   cabecalho: { gap: 8 },
   cartao: { borderWidth: 1, borderColor: cores.borda, borderRadius: 8, padding: 12, gap: 4 },
+  cartaoPressionado: { backgroundColor: '#f1f3f4' },
   titulo: { fontSize: 16, fontWeight: '600', color: cores.texto },
   suave: { color: cores.suave, textAlign: 'center' },
   status: { alignSelf: 'flex-start', marginTop: 4, fontSize: 13, color: cores.suave },

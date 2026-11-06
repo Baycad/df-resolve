@@ -45,7 +45,8 @@ export function Campo({ rotulo, ref, ajuda, estilo, ...props }) {
   );
 }
 
-export function Botao({ titulo, onPress, carregando = false, desabilitado = false }) {
+// variante: 'principal' (azul) ou 'perigo' (vermelho, para ações destrutivas).
+export function Botao({ titulo, onPress, carregando = false, desabilitado = false, variante = 'principal' }) {
   const inativo = carregando || desabilitado;
   return (
     <Pressable
@@ -53,7 +54,12 @@ export function Botao({ titulo, onPress, carregando = false, desabilitado = fals
       disabled={inativo}
       accessibilityRole="button"
       accessibilityState={{ disabled: inativo, busy: carregando }}
-      style={({ pressed }) => [styles.botao, inativo && styles.botaoInativo, pressed && !inativo && styles.botaoPressionado]}
+      style={({ pressed }) => [
+        styles.botao,
+        variante === 'perigo' && styles.botaoPerigo,
+        inativo && styles.botaoInativo,
+        pressed && !inativo && styles.botaoPressionado,
+      ]}
     >
       {carregando ? <ActivityIndicator color="#fff" /> : <Text style={styles.textoBotao}>{titulo}</Text>}
     </Pressable>
@@ -95,6 +101,7 @@ const styles = StyleSheet.create({
   },
   botao: { minHeight: 48, borderRadius: 8, backgroundColor: cores.destaque, alignItems: 'center', justifyContent: 'center' },
   botaoInativo: { backgroundColor: cores.desabilitado },
+  botaoPerigo: { backgroundColor: cores.erroTexto },
   botaoPressionado: { opacity: 0.85 },
   textoBotao: { color: '#fff', fontSize: 16, fontWeight: '600' },
   link: { color: cores.destaque, fontSize: 15, textAlign: 'center', paddingVertical: 4 },
