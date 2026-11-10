@@ -33,19 +33,26 @@ Repositório público: https://github.com/Baycad/df-resolve (branch `main`).
 - O usuário roda o servidor no próprio terminal. Para testes de API, usar `curl.exe` (não `curl`).
 - No PowerShell, JSON com aspas deve ir por arquivo temporário em `$env:TEMP` com `--data-binary "@arquivo"`.
 - Backups dos bancos: `X:\programação\DF-RESOLVE-BACKUPS\<pasta-nova>`. Nunca sobrescrever um backup existente.
-- A pasta de backups só aceita escrita como administrador. O backup é feito pelo usuário em PowerShell de administrador.
+- A pasta de backups só aceita escrita como administrador. O backup é feito pelo usuário em PowerShell de administrador, com o bloco inteiro dentro de `& { $ErrorActionPreference = "Stop"; ... }`, para parar no primeiro erro, e conferência do SHA256 das cópias.
 - Scripts Python que precisem de aspas vão em arquivo `.py` no scratchpad, executados com `.\venv\Scripts\python.exe -I`. Nunca `python -c` no PowerShell, que desmonta as aspas.
 - Funções auxiliares no PowerShell não podem ter nome igual a um apelido embutido (por exemplo, `R` é apelido de `Invoke-History`).
 - Durante uma bateria de testes, o usuário não usa o site em paralelo sem avisar antes.
 - Comandos que dependem de pasta usam caminho absoluto: `cmd /c "cd /d <caminho> && ..."`. Quando for preciso trocar de pasta no PowerShell, o comando seguinte vai dentro de `if ($?) { ... }`, para não rodar se a troca falhar.
 - Antes de qualquer `npm`/`npx` no app, conferir que `X:\programação\DF-RESOLVE-BACKEND\mobile\package.json` tem `"name": "mobile"`.
-- Testes com log: Flask com `-u` e `>> "%TEMP%\<arquivo>.log" 2>&1`; Metro com `>>`. Sem terminal interativo, o projeto é aberto pelo "Recently opened" do Expo Go ou por `exp://192.168.0.9:8081`.
+- Testes com log: sempre neste formato, com `cd /d` absoluto e as aspas do log dobradas dentro do `cmd /c`:
+  - Flask, modo padrão: `cmd /c "cd /d X:\programação\DF-RESOLVE-BACKEND && set DF_RESOLVE_DEBUG=0&& .\venv\Scripts\python.exe -u -m df_resolve.app >> ""%TEMP%\<arquivo>.log"" 2>&1"`. O `DF_RESOLVE_DEBUG=0` evita o reloader.
+  - Flask e Metro em modo rede: ver abaixo. O Metro leva `--clear` quando há tela nova.
+  - Sem terminal interativo, o projeto é aberto pelo "Recently opened" do Expo Go ou por `exp://192.168.0.9:8081`.
+  - Um Ctrl+C no Flask não deixa linha no log; um novo início aparece como um novo bloco "Rotas disponíveis".
+- Links diretos para telas do app (`exp://192.168.0.9:8081/--/<rota>`): tocar no link numa conversa abre o Chrome, e não o app. Usar a opção "Enter URL manually" do Expo Go.
+- Conferência do banco em testes que alteram dados: antes do teste, salvar uma foto com `foto_banco.py <arquivo>.json salvar` (no scratchpad, um arquivo novo por teste; ele recusa sobrescrever) e, depois, `comparar`. A foto guarda só o SHA-256 de cada linha de todas as tabelas; a comparação mostra só tabela e id. O `foto_banco.py` fica no scratchpad da sessão e não é versionado: quando for necessário, deve ser recriado e mostrado ao usuário antes de rodar.
 
 ### Modo rede (testes com celular)
 
 - O IP `192.168.0.9` vem do DHCP do roteador e pode mudar. Antes de cada teste, conferir com `ipconfig` (adaptador Ethernet). Se mudar, atualizar o `mobile/.env` e os dois comandos abaixo.
-- Flask (a partir da raiz): `cmd /c "set DF_RESOLVE_HOST=192.168.0.9&& .\venv\Scripts\python.exe -m df_resolve.app"`. O debug desliga sozinho (aparece o aviso e não aparece Debugger PIN). Não usar `0.0.0.0`: abriria o servidor também para a VPN Radmin (26.109.226.136).
-- Expo (a partir da raiz): `cmd /c "set REACT_NATIVE_PACKAGER_HOSTNAME=192.168.0.9&& cd mobile && npx.cmd expo start"`. Sem a variável, o QR pode usar o IP da VPN.
+- Flask: `cmd /c "cd /d X:\programação\DF-RESOLVE-BACKEND && set DF_RESOLVE_HOST=192.168.0.9&& .\venv\Scripts\python.exe -u -m df_resolve.app >> ""%TEMP%\<arquivo>-servidor.log"" 2>&1"`. O debug desliga sozinho (aparece o aviso e não aparece Debugger PIN). Não usar `0.0.0.0`: abriria o servidor também para a VPN Radmin (26.109.226.136).
+- Expo: `cmd /c "cd /d X:\programação\DF-RESOLVE-BACKEND\mobile && set REACT_NATIVE_PACKAGER_HOSTNAME=192.168.0.9&& npx.cmd expo start --clear >> ""%TEMP%\<arquivo>-metro.log"" 2>&1"`. Sem a variável, o QR pode usar o IP da VPN.
+- O site antigo chama sempre `http://127.0.0.1:5000`, então só funciona com o Flask em modo padrão. Em modo rede, o Flask não responde em `127.0.0.1`.
 - O Metro escuta em todas as interfaces (`0.0.0.0:8081`), inclusive a da VPN Radmin; a variável acima só define o endereço do QR. A VPN está no perfil Público e a regra de firewall da 8081 vale só para o perfil Privado e a sub-rede local, então pela VPN a porta deve estar bloqueada. NÃO VERIFICADO.
 - Ao terminar, voltar o Flask ao modo padrão.
 - Sempre usar `npm.cmd` e `npx.cmd`, e nunca chamar `npx` com nomes vindos de variáveis.
@@ -75,7 +82,9 @@ instance/                    pasta vazia na raiz, sem uso
 mobile/                      app Expo SDK 58, Expo Router, JavaScript
   app/_layout.js             SessaoProvider, splash e Stack.Protected
   app/(app)/_layout.js       Stack logado, com botão Sair
-  app/(app)/index.js         Minhas Denúncias (rota "/")
+  app/(app)/index.js         Minhas Denúncias (rota "/"): id maior primeiro, recarga ao ganhar foco, trava de toque duplo
+  app/(app)/nova.js          nova denúncia (POST /denuncias/), com contadores e trava de toques repetidos
+  app/(app)/denuncia/[id].js detalhe, edição (PATCH só dos campos alterados) e exclusão com confirmação; só leitura se não for Pendente
   app/login.js               login por POST /auth/token
   app/cadastro.js            cadastro com confirmação de senha e login automático
   app/diagnostico.js         teste de conexão (GET /auth/check), sem login
@@ -83,7 +92,7 @@ mobile/                      app Expo SDK 58, Expo Router, JavaScript
   components/BotaoSair.js
   contexts/sessao.js         sessão; token só em memória e no expo-secure-store
   services/api.js            requisições, Bearer, tempo limite (8 s; 5 s no logout), erros
-  utils/validacao.js         regras copiadas de auth_routes.py
+  utils/validacao.js         regras copiadas de auth_routes.py e denuncia_routes.py (limites 100/200/2000, mesma ordem da tela)
   .env.example               modelo versionado
   .env                       EXPO_PUBLIC_API_URL (não versionado)
 requirements.txt
@@ -123,13 +132,18 @@ Todas as respostas de erro usam JSON no formato `{"message": "..."}`.
 | POST | /auth/token | não | username, password. 200 com `token`, `token_type: Bearer` e `expires_at` (30 dias), `Cache-Control: no-store`. Não cria cookie |
 | POST | /auth/token/revoke | Bearer | revoga o token enviado; inválido, expirado ou revogado: 401 |
 | GET | /auth/me | sim | `{id, username}` |
+| GET | /denuncias/<id> | sim | `{id, titulo, descricao, endereco, status}`. Denúncia de outro dono ou inexistente: 404 igual |
+| PATCH | /denuncias/<id> | sim | parcial: só titulo, descricao e endereco (mesmos limites, com `strip`). Campo fora desses: 400. Corpo sem nenhum campo: 400. Status diferente de "Pendente": 409 (antes de validar o corpo) |
+| DELETE | /denuncias/<id> | sim | exclusão física. Status diferente de "Pendente": 409 |
 
 - "Auth sim" aceita cookie de sessão ou `Authorization: Bearer <token>` (pelo `request_loader`). Com os dois, vale a sessão.
 - O token só é aceito no cabeçalho, nunca na URL. Cabeçalho malformado é tratado como ausente (401). `/auth/check` também reconhece o Bearer. `POST /auth/logout` com Bearer revoga o token.
 - Token: 43 caracteres (`secrets.token_urlsafe(32)`); no banco só o SHA-256.
 - Sem login: 401 JSON. Corpo inválido: 400 JSON. Erro inesperado: 500 JSON, com traceback no terminal.
 - O dono da denúncia vem sempre de `current_user`, nunca do cliente.
-- Não existem rotas de detalhe, edição, exclusão ou alteração de status. O status nunca muda.
+- Não existe rota de alteração de status. Nos testes, o status só mudou por script autorizado (`status_denuncia.py`).
+- Id que não é número inteiro (`/denuncias/abc`, `/denuncias/-1`): 404 no GET e 405 JSON no PATCH e no DELETE, por causa da rota de arquivos do frontend em `/` (`static_url_path="/"`). Contrato aceito no 6A. O app recusa esses ids antes de chamar o servidor.
+- `POST /denuncias/` ignora campos extras (`status`, `user_id`, `id`): a denúncia nasce Pendente e do usuário logado.
 - CORS liberado só para `http://127.0.0.1:5500` (Live Server). O app nativo não depende de CORS.
 - Limites por IP (`request.remote_addr`; `X-Forwarded-For` é ignorado):
   - POST /auth/login e POST /auth/token, com contadores compartilhados (`shared_limit`, escopos `login_total` e `login_falhas`): 5 falhas (401) por minuto e 20 por hora; 30 requisições por minuto no total.
@@ -174,6 +188,21 @@ Todas as respostas de erro usam JSON no formato `{"message": "..."}`.
   - Lacuna: no bloco D, dois inícios do Flask não aparecem no log; o T15b foi aprovado só pela tela, e o T20 não cobre a saída desses dois processos.
   - Dados de teste criados: usuário `fase5_teste`; tokens ids 6 e 8 a 13 (`fase5_teste`) e 5 e 7 (`teste_fase2`), todos revogados (ids 8, 9, 10, 11 e 13 revogados por script, com autorização). Só podem ser removidos com autorização do usuário.
   - A conta `fase4_teste` não serve mais para testes de login: a senha foi apagada na limpeza da Fase 4.
+- Fase 6 (detalhe, criação, edição e exclusão de denúncias no app): implementada e testada de 2026-11-06 a 2026-11-09.
+  - Backup antes da fase: `X:\programação\DF-RESOLVE-BACKUPS\2026-11-06-antes-fase6`. Esquema do banco sem alteração.
+  - 6A (backend), commit `c77b3a5`: `GET`, `PATCH` e `DELETE /denuncias/<id>`, só do dono. Testes A1 a A16 aprovados (A16: 0 tokens no log).
+  - 6B (criar e listar no app), commit `d2173ed`: testes P2, P3 e B1 a B12 aprovados.
+  - 6C (editar e excluir no app), commit `aae9ef0` (push feito): testes C1 a C15 aprovados, com estas notas:
+    - C6: um único `PATCH`, mas os toques que sobraram abriam o cartão duas vezes na lista. Corrigido no 6D.
+    - C10: a conferência das outras linhas foi só parcial (sem foto antes). Daí a regra do `foto_banco.py`, usada do C12 em diante.
+    - C13 original: inconclusivo, NÃO VERIFICADO. Causa provável: o link tocado na conversa abriu o Chrome e não chegou ao app. Repetido com "Enter URL manually": um único `GET /denuncias/15 404`, nenhum pedido com `abc`. No meio, o usuário saiu e entrou de novo (token 21 revogado, 22 criado).
+  - 6D (trava de toque duplo na lista), commit `d206813`: testes T1 a T7 aprovados. T3 e T6 valem só pela tela; T4 aprovado pela tela e pelo log, e o cancelamento do temporizador foi verificado por revisão do código (a corrida não é reproduzível à mão).
+  - Módulos: o `expo export` foi de 1154 (Fase 5) para 1156 (6C e 6D). O bundle de desenvolvimento do Metro é outra medida: 1291 no 6B e 1292 no 6D. A diferença de 1 e as linhas `Bundled ... (1 module)` ficam NÃO INVESTIGADAS, sem indicação de erro; a hipótese é que o Expo Go recarregou o app (NÃO VERIFICADA).
+  - Duas atualizações seguidas da lista no log (C13 repetido): NÃO VERIFICADO, sem indicação de falha.
+  - Dados de teste criados (só podem ser removidos com autorização do usuário):
+    - usuários `fase6_teste` e `fase6_outro`, sem senha conhecida (como a `fase4_teste`);
+    - denúncias 12 e 18 (`fase6_teste`, Pendente), 14 (`fase6_teste`, "Em análise" por script), 15 (`fase6_outro`), 16 e 17 (`fase5_teste`, pelo site), 20 (`fase5_teste`, "Em análise" por script no C7) e 21 (`fase5_teste`, título "Teste C11"). A 13 e a 19 foram excluídas nos testes;
+    - tokens 14 a 22, todos revogados (17, 20 e 22 por script, com autorização). Ao fim da fase, 0 tokens ativos em todas as contas, e 0 tokens nos logs do 6C e do 6D.
 
 ## Problemas conhecidos
 
@@ -187,6 +216,9 @@ Todas as respostas de erro usam JSON no formato `{"message": "..."}`.
 - Não existe "sair de todos os aparelhos" nem limite de tokens ativos por usuário.
 - Logout sem rede: o token é apagado do aparelho, mas continua ativo no servidor até expirar (30 dias).
 - Caso das 10:29:53 de 2026-11-06, NÃO EXPLICADO: depois de um Sair sem rede (T17), o app abriu com um token ainda salvo. Não se repetiu no T17b nem no T17r. Desde então, o `apagarToken` confere a remoção, tenta de novo e avisa se falhar; o caminho de falha desse reforço está NÃO TESTADO (não dá para provocar a falha no aparelho).
+- A exclusão de denúncia é física (sem histórico nem como desfazer). Avaliar exclusão lógica.
+- Configurar explicitamente o `SESSION_COOKIE_SAMESITE` (hoje vale o padrão do navegador). As rotas `PATCH` e `DELETE` também aceitam o cookie de sessão do site.
+- Se a criação de uma denúncia passar dos 8 s mas o servidor gravar, o app mostra erro e um novo toque cria uma duplicata.
 
 ### Demais
 - 4 contas continuam com `sha256` até fazerem login. Werkzeug 3 remove o `sha256`: atualizar antes da conversão impede o login dessas contas.
@@ -198,21 +230,24 @@ Todas as respostas de erro usam JSON no formato `{"message": "..."}`.
 - Aviso do Git `unable to find all commit-graph files`: é só cache; pode ser recriado com `git commit-graph write --reachable` mediante autorização.
 - App mobile, revisar na próxima atualização do SDK do Expo:
   - `npm audit` aponta 8 vulnerabilidades moderadas indiretas em ferramentas de desenvolvimento (eram 11; a causa da mudança não foi investigada). Não vão para o app. Não usar `npm audit fix`, que mudaria versões fixadas pelo SDK.
-- As mensagens de erro do app usam termos técnicos ("Flask", "modo rede"). Revisar na Fase 7.
+- Revisar na Fase 7:
+  - As mensagens de erro do app usam termos técnicos ("Flask", "modo rede").
+  - No `PATCH`, um título numérico (`123`) ou `null` recebe "O campo título não pode ficar vazio.", que não descreve bem o caso.
+  - Na tela de detalhe, a mensagem de erro de validação continua visível depois que o campo é corrigido.
 
-## Próxima etapa: Fase 6 (PROPOSTA, aguardando plano)
+## Próxima etapa: Fase 7 (PROPOSTA, aguardando plano)
 
-Criar e listar denúncias no app.
+Estados de carregamento, vazio e erro, revisão das mensagens e acabamento.
 
 ## Roadmap (PROPOSTA)
 
-Decidido: app em `mobile/` neste repositório, navegação com Expo Router, JavaScript, token opaco. A primeira versão faz só o que o backend já faz (cadastro, login, logout, criar e listar denúncias), sem foto, GPS ou categoria.
+Decidido: app em `mobile/` neste repositório, navegação com Expo Router, JavaScript, token opaco. A primeira versão faz só o que o backend já faz (cadastro, login, logout, criar, listar, ver, editar e excluir denúncias), sem foto, GPS ou categoria.
 
 - Fase 3: esqueleto do app Expo em `mobile/` e teste de conexão com o Flask pela rede Wi-Fi, sem login. Concluída.
 - Fase 4: autenticação por token para o app. Cria tabela nova: exige backup e plano antes. Proposta: token opaco aleatório, salvo como hash em `auth_token` (expiração e revogação), lido por `request_loader` do Flask-Login; rotas `/auth/token`, `/auth/token/revoke`, `/auth/me`; no app, token em `expo-secure-store` (nunca AsyncStorage). O fluxo web por cookie continua igual. Concluída.
 - Fase 5: telas de cadastro, login e logout. Concluída.
-- Fase 6: criar e listar denúncias.
-- Fase 7: detalhes (`GET /denuncias/<id>` com checagem de dono), estados de carregamento, vazio e erro, e acabamento.
+- Fase 6: criar, listar, ver, editar e excluir denúncias (o `GET /denuncias/<id>` com checagem de dono entrou aqui). Concluída.
+- Fase 7: estados de carregamento, vazio e erro, revisão das mensagens e acabamento.
 
 ## Decisões pendentes do usuário
 
