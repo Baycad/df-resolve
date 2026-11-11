@@ -15,6 +15,10 @@ class Denuncia(db.Model):
     endereco = db.Column(db.String(200), nullable=False)
     status = db.Column(db.String(50), default='Pendente')
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    # Migração 0001 (Fase 7). Aceitam NULL: as denúncias antigas não têm esses dados.
+    categoria = db.Column(db.String(30))
+    latitude = db.Column(db.Float)
+    longitude = db.Column(db.Float)
 
 class AuthToken(db.Model):
     # Tokens do app mobile. Guarda só o hash; o token em texto nunca vai para o banco.

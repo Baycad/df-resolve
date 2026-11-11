@@ -13,6 +13,10 @@ CAMPOS_DENUNCIA = {
 }
 # Só denúncias com este status podem ser editadas ou excluídas pelo dono.
 STATUS_EDITAVEL = 'Pendente'
+# Chaves de categoria gravadas no banco (D4). Os rótulos ficam no app (mobile/utils/validacao.js).
+CATEGORIAS = ('buraco', 'iluminacao', 'lixo', 'calcada', 'sinalizacao', 'arvore', 'esgoto', 'outros')
+CAMPOS_EDITAVEIS = tuple(CAMPOS_DENUNCIA) + ('categoria',)
+MENSAGEM_CATEGORIA = 'Categoria inválida. Use uma destas: ' + ', '.join(CATEGORIAS) + '.'
 
 
 def _ler_json():
@@ -28,12 +32,12 @@ def _erro(mensagem, status=400):
 def _validar_campos(dados, parcial):
     """Retorna (valores, None) ou (None, mensagem de erro).
 
-    No cadastro (parcial=False) os três campos são obrigatórios e outros campos são ignorados,
-    como antes. Na edição (parcial=True) só os campos enviados são validados, e campos fora
-    dos três são recusados.
+    No cadastro (parcial=False) os três campos de texto são obrigatórios, a categoria é opcional
+    e outros campos são ignorados, como antes. Na edição (parcial=True) só os campos enviados são
+    validados, e campos fora de título, descrição, endereço e categoria são recusados.
     """
-    if parcial and set(dados) - set(CAMPOS_DENUNCIA):
-        return None, 'Só é possível editar título, descrição e endereço.'
+    if parcial and set(dados) - set(CAMPOS_EDITAVEIS):
+        return None, 'Só é possível editar título, descrição, endereço e categoria.'
 
     valores = {}
     for campo, (nome, limite) in CAMPOS_DENUNCIA.items():
@@ -48,8 +52,16 @@ def _validar_campos(dados, parcial):
             return None, f'O campo {nome} deve ter no máximo {limite} caracteres.'
         valores[campo] = valor
 
+    # Categoria é opcional (D3). Quando vem no corpo, tem que ser exatamente uma das chaves:
+    # null, texto vazio, maiúsculas, espaços e qualquer tipo que não seja texto são inválidos (E-a).
+    if 'categoria' in dados:
+        valor = dados['categoria']
+        if not isinstance(valor, str) or valor not in CATEGORIAS:
+            return None, MENSAGEM_CATEGORIA
+        valores['categoria'] = valor
+
     if parcial and not valores:
-        return None, 'Envie ao menos um campo: titulo, descricao ou endereco.'
+        return None, 'Envie ao menos um campo: titulo, descricao, endereco ou categoria.'
     return valores, None
 
 
@@ -60,6 +72,8 @@ def _como_json(d):
         'descricao': d.descricao,
         'endereco': d.endereco,
         'status': d.status,
+        # null nas denúncias antigas. Latitude e longitude só entram na API no bloco 7C.
+        'categoria': d.categoria,
     }
 
 
@@ -90,6 +104,7 @@ def criar_denuncia():
         titulo=valores['titulo'],
         descricao=valores['descricao'],
         endereco=valores['endereco'],
+        categoria=valores.get('categoria'),  # sem categoria no corpo: NULL
         # O dono vem sempre da sessão, nunca do corpo da requisição.
         user_id=current_user.id
     )
