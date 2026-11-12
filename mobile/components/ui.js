@@ -8,6 +8,8 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useHeaderHeight } from 'expo-router/react-navigation';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export const cores = {
   fundo: '#ffffff',
@@ -23,10 +25,22 @@ export const cores = {
 };
 
 // Tela com rolagem que não fica escondida pelo teclado.
+// No Android de borda a borda, a tela é desenhada atrás da barra de navegação. Por isso o padding de baixo
+// soma insets.bottom: com a tela rolada até o fim, o último botão fica acima da barra (L1).
+// 24 é o mesmo padding de styles.tela; só o de baixo muda.
+// O KeyboardAvoidingView compara a posição do teclado (medida a partir do topo da janela) com a própria
+// posição (medida a partir do topo do conteúdo, abaixo do cabeçalho). Sem o deslocamento do cabeçalho
+// (que já inclui a barra de status), o fim da tela ficava atrás do teclado (L2).
+// Toda tela que usa a Tela está num Stack com cabeçalho; fora disso, useHeaderHeight lança erro.
 export function Tela({ children }) {
+  const insets = useSafeAreaInsets();
+  const alturaCabecalho = useHeaderHeight();
   return (
-    <KeyboardAvoidingView style={styles.flex} behavior="padding">
-      <ScrollView contentContainerStyle={styles.tela} keyboardShouldPersistTaps="handled">
+    <KeyboardAvoidingView style={styles.flex} behavior="padding" keyboardVerticalOffset={alturaCabecalho}>
+      <ScrollView
+        contentContainerStyle={[styles.tela, { paddingBottom: 24 + insets.bottom }]}
+        keyboardShouldPersistTaps="handled"
+      >
         {children}
       </ScrollView>
     </KeyboardAvoidingView>
@@ -41,6 +55,39 @@ export function Campo({ rotulo, ref, ajuda, estilo, ...props }) {
       <Text style={styles.rotulo}>{rotulo}</Text>
       <TextInput ref={ref} style={[styles.entrada, estilo]} placeholderTextColor={cores.suave} {...props} />
       {ajuda ? <Text style={styles.ajuda}>{ajuda}</Text> : null}
+    </View>
+  );
+}
+
+// Escolha de uma opção entre botões ("chips"), sem dependência externa.
+// opcoes: [{ chave, rotulo }]. valor null ou fora da lista: nenhum chip marcado.
+// Não existe "desmarcar": tocar no chip marcado mantém a escolha.
+export function SeletorCategoria({ rotulo, opcoes, valor, onChange, desabilitado = false }) {
+  return (
+    <View style={styles.campo}>
+      <Text style={styles.rotulo}>{rotulo}</Text>
+      <View style={styles.chips} accessibilityRole="radiogroup" accessibilityLabel={rotulo}>
+        {opcoes.map((opcao) => {
+          const marcado = valor === opcao.chave;
+          return (
+            <Pressable
+              key={opcao.chave}
+              onPress={() => onChange(opcao.chave)}
+              disabled={desabilitado}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: marcado, disabled: desabilitado }}
+              style={({ pressed }) => [
+                styles.chip,
+                marcado && styles.chipMarcado,
+                desabilitado && styles.chipInativo,
+                pressed && !desabilitado && styles.botaoPressionado,
+              ]}
+            >
+              <Text style={[styles.textoChip, marcado && styles.textoChipMarcado]}>{opcao.rotulo}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
     </View>
   );
 }
@@ -99,6 +146,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: cores.texto,
   },
+  // Alvo de toque de 44 pt de altura em cada chip.
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: cores.borda,
+    backgroundColor: cores.fundo,
+  },
+  chipMarcado: { backgroundColor: cores.destaque, borderColor: cores.destaque },
+  chipInativo: { opacity: 0.6 },
+  textoChip: { fontSize: 15, color: cores.texto },
+  textoChipMarcado: { color: '#fff', fontWeight: '600' },
   botao: { minHeight: 48, borderRadius: 8, backgroundColor: cores.destaque, alignItems: 'center', justifyContent: 'center' },
   botaoInativo: { backgroundColor: cores.desabilitado },
   botaoPerigo: { backgroundColor: cores.erroTexto },

@@ -2,15 +2,16 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
-import { Botao, Campo, cores, Mensagem, Tela } from '../../../components/ui';
+import { Botao, Campo, cores, Mensagem, SeletorCategoria, Tela } from '../../../components/ui';
 import { useSessao } from '../../../contexts/sessao';
 import { api, ErroApi, textoDoErro } from '../../../services/api';
-import { CAMPOS_DENUNCIA, tamanho, validarDenuncia } from '../../../utils/validacao';
+import { CAMPOS_DENUNCIA, CATEGORIAS, rotuloCategoria, tamanho, validarDenuncia } from '../../../utils/validacao';
 
 // Igual a STATUS_EDITAVEL em df_resolve/routes/denuncia_routes.py.
 const STATUS_EDITAVEL = 'Pendente';
 const NAO_ENCONTRADA = 'Denúncia não encontrada. Ela pode ter sido excluída.';
 const STATUS_MUDOU = 'O status desta denúncia mudou e as alterações não foram salvas.';
+const SEM_CATEGORIA = 'Sem categoria';
 
 function contador(valor, campo) {
   return `${tamanho(valor.trim())}/${CAMPOS_DENUNCIA[campo].limite}`;
@@ -34,6 +35,7 @@ export default function DetalheDenuncia() {
 
   const [estado, setEstado] = useState(idValido ? 'carregando' : 'naoEncontrada'); // carregando | pronto | erro | naoEncontrada
   const [original, setOriginal] = useState(null);
+  const [categoria, setCategoria] = useState(null); // null: denúncia antiga, sem categoria
   const [titulo, setTitulo] = useState('');
   const [endereco, setEndereco] = useState('');
   const [descricao, setDescricao] = useState('');
@@ -52,6 +54,7 @@ export default function DetalheDenuncia() {
     try {
       const d = await api.detalharDenuncia(token, id);
       setOriginal(d);
+      setCategoria(d.categoria ?? null);
       setTitulo(d.titulo ?? '');
       setEndereco(d.endereco ?? '');
       setDescricao(d.descricao ?? '');
@@ -81,9 +84,12 @@ export default function DetalheDenuncia() {
 
   // Só os campos que mudaram vão no PATCH, já sem espaços nas pontas.
   // O original também é comparado sem espaços, para um dado antigo com espaços não contar como alteração.
+  // A categoria é comparada sem trim. Sem escolha numa denúncia antiga (null), ela nem vai no PATCH (D3);
+  // e não existe como voltar a "sem categoria" (E-a).
   const valores = { titulo, endereco, descricao };
   const alterados = {};
   if (original) {
+    if (categoria !== null && categoria !== (original.categoria ?? null)) alterados.categoria = categoria;
     for (const campo of Object.keys(CAMPOS_DENUNCIA)) {
       const valor = valores[campo].trim();
       if (valor !== (original[campo] ?? '').trim()) alterados[campo] = valor;
@@ -198,6 +204,7 @@ export default function DetalheDenuncia() {
         <Mensagem tipo="aviso">
           {`Esta denúncia está com status ${original.status}. Só é possível alterar denúncias com status ${STATUS_EDITAVEL}.`}
         </Mensagem>
+        <Leitura rotulo="Categoria" valor={rotuloCategoria(original.categoria) ?? SEM_CATEGORIA} />
         <Leitura rotulo="Título" valor={original.titulo} />
         <Leitura rotulo="Endereço" valor={original.endereco} />
         <Leitura rotulo="Descrição" valor={original.descricao} />
@@ -209,6 +216,13 @@ export default function DetalheDenuncia() {
   return (
     <Tela>
       <Text style={styles.status}>Status: {original.status}</Text>
+      <SeletorCategoria
+        rotulo="Categoria"
+        opcoes={CATEGORIAS}
+        valor={categoria}
+        onChange={setCategoria}
+        desabilitado={ocupado !== null}
+      />
       <Campo
         rotulo="Título"
         value={titulo}

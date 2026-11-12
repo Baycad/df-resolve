@@ -2,10 +2,10 @@ import { useRef, useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 
-import { Botao, Campo, Mensagem, Tela } from '../../components/ui';
+import { Botao, Campo, Mensagem, SeletorCategoria, Tela } from '../../components/ui';
 import { useSessao } from '../../contexts/sessao';
 import { api, ErroApi, textoDoErro } from '../../services/api';
-import { CAMPOS_DENUNCIA, tamanho, validarDenuncia } from '../../utils/validacao';
+import { CAMPOS_DENUNCIA, CATEGORIAS, tamanho, validarDenuncia } from '../../utils/validacao';
 
 function contador(valor, campo) {
   return `${tamanho(valor.trim())}/${CAMPOS_DENUNCIA[campo].limite}`;
@@ -14,6 +14,7 @@ function contador(valor, campo) {
 export default function NovaDenuncia() {
   const router = useRouter();
   const { token, sessaoExpirada } = useSessao();
+  const [categoria, setCategoria] = useState(null); // obrigatória no app (D3); null até a pessoa escolher
   const [titulo, setTitulo] = useState('');
   const [endereco, setEndereco] = useState('');
   const [descricao, setDescricao] = useState('');
@@ -28,7 +29,7 @@ export default function NovaDenuncia() {
   async function enviar() {
     if (travado.current) return;
     travado.current = true;
-    const problema = validarDenuncia({ titulo, endereco, descricao });
+    const problema = validarDenuncia({ categoria, titulo, endereco, descricao });
     if (problema) {
       setErro(problema);
       travado.current = false;
@@ -41,6 +42,7 @@ export default function NovaDenuncia() {
         titulo: titulo.trim(),
         descricao: descricao.trim(),
         endereco: endereco.trim(),
+        categoria,
       });
     } catch (e) {
       if (e instanceof ErroApi && e.status === 401) {
@@ -59,6 +61,13 @@ export default function NovaDenuncia() {
 
   return (
     <Tela>
+      <SeletorCategoria
+        rotulo="Categoria"
+        opcoes={CATEGORIAS}
+        valor={categoria}
+        onChange={setCategoria}
+        desabilitado={enviando}
+      />
       <Campo
         rotulo="Título"
         value={titulo}

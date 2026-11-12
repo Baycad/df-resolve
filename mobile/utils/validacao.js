@@ -45,9 +45,33 @@ export const CAMPOS_DENUNCIA = {
   descricao: { nome: 'descrição', limite: 2000 },
 };
 
-// Mesmas mensagens do servidor. No cadastro os três campos são obrigatórios;
-// na edição ({ edicao: true }) só os campos enviados são conferidos, como no PATCH.
+// Chaves copiadas de CATEGORIAS em df_resolve/routes/denuncia_routes.py, na mesma ordem.
+// A chave é o que vai para o servidor; o rótulo é o que aparece na tela.
+export const CATEGORIAS = [
+  { chave: 'buraco', rotulo: 'Buraco ou via danificada' },
+  { chave: 'iluminacao', rotulo: 'Iluminação pública' },
+  { chave: 'lixo', rotulo: 'Lixo e entulho' },
+  { chave: 'calcada', rotulo: 'Calçada' },
+  { chave: 'sinalizacao', rotulo: 'Sinalização de trânsito' },
+  { chave: 'arvore', rotulo: 'Árvore e poda' },
+  { chave: 'esgoto', rotulo: 'Esgoto e drenagem' },
+  { chave: 'outros', rotulo: 'Outros' },
+];
+const CHAVES_CATEGORIA = CATEGORIAS.map((c) => c.chave);
+
+// Denúncia antiga (null) devolve null; uma chave fora da lista devolve "Outra categoria".
+export function rotuloCategoria(chave) {
+  if (chave == null) return null;
+  return CATEGORIAS.find((c) => c.chave === chave)?.rotulo ?? 'Outra categoria';
+}
+
+// Mesmas mensagens do servidor para os textos. No cadastro tudo é obrigatório, inclusive a categoria
+// (regra só do app; a API aceita sem). Na edição ({ edicao: true }) só os campos enviados são
+// conferidos, como no PATCH. A categoria vem primeiro porque o seletor fica no topo da tela.
 export function validarDenuncia(valores, { edicao = false } = {}) {
+  if (!edicao || 'categoria' in valores) {
+    if (!CHAVES_CATEGORIA.includes(valores.categoria)) return 'Escolha uma categoria.';
+  }
   for (const [campo, { nome, limite }] of Object.entries(CAMPOS_DENUNCIA)) {
     if (edicao && !(campo in valores)) continue;
     const valor = (valores[campo] ?? '').trim();

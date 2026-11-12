@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Botao, cores, Mensagem } from '../../components/ui';
 import { useSessao } from '../../contexts/sessao';
 import { api, ErroApi, textoDoErro } from '../../services/api';
+import { rotuloCategoria } from '../../utils/validacao';
 
 // Toques nos primeiros 500 ms depois de a lista voltar a ter foco são ignorados:
 // costumam ser toques repetidos que sobraram da tela anterior (ressalva do C6).
@@ -15,6 +17,9 @@ const LIBERA_SEM_NAVEGACAO_MS = 1000;
 export default function MinhasDenuncias() {
   const router = useRouter();
   const navigation = useNavigation();
+  // Espaço da barra de navegação do Android no fim da lista, como na Tela (L1).
+  // No FlatList, o padding de baixo vira 16 (o mesmo de styles.lista) + insets.bottom.
+  const insets = useSafeAreaInsets();
   const { token, usuario, sessaoExpirada } = useSessao();
   const [estado, setEstado] = useState('carregando'); // carregando | pronto | erro
   const [denuncias, setDenuncias] = useState([]);
@@ -111,7 +116,7 @@ export default function MinhasDenuncias() {
   return (
     <FlatList
       style={styles.fundo}
-      contentContainerStyle={styles.lista}
+      contentContainerStyle={[styles.lista, { paddingBottom: 16 + insets.bottom }]}
       data={denuncias}
       keyExtractor={(d) => String(d.id)}
       refreshing={atualizando}
@@ -123,19 +128,24 @@ export default function MinhasDenuncias() {
         </View>
       }
       ListEmptyComponent={<Text style={styles.vazio}>Você ainda não tem denúncias registradas.</Text>}
-      renderItem={({ item }) => (
-        <Pressable
-          onPress={() => abrir({ pathname: '/denuncia/[id]', params: { id: String(item.id) } })}
-          accessibilityRole="button"
-          accessibilityHint="Abre a denúncia para ver, editar ou excluir"
-          style={({ pressed }) => [styles.cartao, pressed && styles.cartaoPressionado]}
-        >
-          <Text style={styles.titulo}>{item.titulo}</Text>
-          <Text style={styles.suave}>{item.endereco}</Text>
-          <Text numberOfLines={3}>{item.descricao}</Text>
-          <Text style={styles.status}>{item.status}</Text>
-        </Pressable>
-      )}
+      renderItem={({ item }) => {
+        // Denúncia antiga, sem categoria: o cartão não mostra nada nesse lugar (F3).
+        const categoria = rotuloCategoria(item.categoria);
+        return (
+          <Pressable
+            onPress={() => abrir({ pathname: '/denuncia/[id]', params: { id: String(item.id) } })}
+            accessibilityRole="button"
+            accessibilityHint="Abre a denúncia para ver, editar ou excluir"
+            style={({ pressed }) => [styles.cartao, pressed && styles.cartaoPressionado]}
+          >
+            {categoria ? <Text style={styles.categoria}>{categoria}</Text> : null}
+            <Text style={styles.titulo}>{item.titulo}</Text>
+            <Text style={styles.suave}>{item.endereco}</Text>
+            <Text numberOfLines={3}>{item.descricao}</Text>
+            <Text style={styles.status}>{item.status}</Text>
+          </Pressable>
+        );
+      }}
     />
   );
 }
@@ -148,6 +158,7 @@ const styles = StyleSheet.create({
   cabecalho: { gap: 8 },
   cartao: { borderWidth: 1, borderColor: cores.borda, borderRadius: 8, padding: 12, gap: 4 },
   cartaoPressionado: { backgroundColor: '#f1f3f4' },
+  categoria: { alignSelf: 'flex-start', fontSize: 13, fontWeight: '600', color: cores.destaque },
   titulo: { fontSize: 16, fontWeight: '600', color: cores.texto },
   suave: { color: cores.suave, textAlign: 'center' },
   status: { alignSelf: 'flex-start', marginTop: 4, fontSize: 13, color: cores.suave },
