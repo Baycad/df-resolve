@@ -53,7 +53,7 @@ export default function Diagnostico() {
 
 const styles = StyleSheet.create({
   tela: { flex: 1, padding: 24, gap: 16, backgroundColor: cores.fundo, justifyContent: 'center' },
-  url: { fontSize: 14, color: cores.suave, textAlign: 'center' },
+  url: { fontSize: 14, color: cores.textoSecundario, textAlign: 'center' },
   caixa: { padding: 16, borderRadius: 8, gap: 8, alignItems: 'center', backgroundColor: '#f2f2f2' },
   sucesso: { backgroundColor: '#e6f4ea' },
   rotulo: { fontSize: 16, fontWeight: '600' },

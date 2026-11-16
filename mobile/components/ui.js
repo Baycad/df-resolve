@@ -11,17 +11,44 @@ import {
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+// Paleta B (verde floresta), modo claro. Cada cor tem um papel; as telas usam o papel, nunca o hex.
+// Contraste conferido (WCAG) sobre o fundo branco, salvo indicação.
 export const cores = {
-  fundo: '#ffffff',
-  texto: '#1f1f1f',
-  suave: '#5f6368',
-  borda: '#c4c7c5',
-  destaque: '#1a73e8',
+  // Superfícies
+  fundo: '#FFFFFF',
+  superficiePressionada: '#F1F3F4', // valor de antes (cartão pressionado), ainda sem par na paleta B
+  // Texto
+  texto: '#1F2937', // 14,7:1
+  textoSecundario: '#4B5563', // 7,6:1
+  // Ação e seleção
+  primaria: '#1B6B3A', // 6,5:1
+  sobrePrimaria: '#FFFFFF', // 6,5:1 sobre a primaria
+  // Contornos
+  borda: '#6B7280', // campos, chips e cartões: 4,8:1 (mínimo 3:1)
+  bordaSuave: '#D1D5DB', // só divisórias sem função
+  // Estado desativado (mantido)
   desabilitado: '#9aa0a6',
+  // Mensagens (mantidas)
   erroFundo: '#fdecea',
-  erroTexto: '#8c1d18',
+  erroTexto: '#8c1d18', // 8,0:1 sobre erroFundo
   avisoFundo: '#fff4e5',
-  avisoTexto: '#7a4b00',
+  avisoTexto: '#7a4b00', // 6,8:1 sobre avisoFundo
+  // Status da denúncia (para o selo do passo 3; ainda sem uso)
+  statusPendenteFundo: '#FFE9B0',
+  statusPendenteTexto: '#7A4B00', // 6,2:1
+  statusAnaliseFundo: '#D9E6FF',
+  statusAnaliseTexto: '#0B3D91', // 8,0:1
+};
+
+// Escala de tipo única, na fonte do sistema. Em React Native o fontSize acompanha o tamanho de fonte
+// do Android (como sp). Os pesos continuam os de cada estilo.
+export const tipo = {
+  ajuda: 12,
+  secundario: 14,
+  rotulo: 14,
+  corpo: 16,
+  secao: 20,
+  tituloTela: 24,
 };
 
 // Tela com rolagem que não fica escondida pelo teclado.
@@ -53,7 +80,7 @@ export function Campo({ rotulo, ref, ajuda, estilo, ...props }) {
   return (
     <View style={styles.campo}>
       <Text style={styles.rotulo}>{rotulo}</Text>
-      <TextInput ref={ref} style={[styles.entrada, estilo]} placeholderTextColor={cores.suave} {...props} />
+      <TextInput ref={ref} style={[styles.entrada, estilo]} placeholderTextColor={cores.textoSecundario} {...props} />
       {ajuda ? <Text style={styles.ajuda}>{ajuda}</Text> : null}
     </View>
   );
@@ -108,7 +135,7 @@ export function Botao({ titulo, onPress, carregando = false, desabilitado = fals
         pressed && !inativo && styles.botaoPressionado,
       ]}
     >
-      {carregando ? <ActivityIndicator color="#fff" /> : <Text style={styles.textoBotao}>{titulo}</Text>}
+      {carregando ? <ActivityIndicator color={cores.sobrePrimaria} /> : <Text style={styles.textoBotao}>{titulo}</Text>}
     </Pressable>
   );
 }
@@ -135,15 +162,15 @@ const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: cores.fundo },
   tela: { flexGrow: 1, justifyContent: 'center', padding: 24, gap: 16 },
   campo: { gap: 6 },
-  rotulo: { fontSize: 14, fontWeight: '600', color: cores.texto },
-  ajuda: { fontSize: 12, color: cores.suave, textAlign: 'right' },
+  rotulo: { fontSize: tipo.rotulo, fontWeight: '600', color: cores.texto },
+  ajuda: { fontSize: tipo.ajuda, color: cores.textoSecundario, textAlign: 'right' },
   entrada: {
     borderWidth: 1,
     borderColor: cores.borda,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    fontSize: 16,
+    fontSize: tipo.corpo,
     color: cores.texto,
   },
   // Alvo de toque de 44 pt de altura em cada chip.
@@ -157,16 +184,16 @@ const styles = StyleSheet.create({
     borderColor: cores.borda,
     backgroundColor: cores.fundo,
   },
-  chipMarcado: { backgroundColor: cores.destaque, borderColor: cores.destaque },
+  chipMarcado: { backgroundColor: cores.primaria, borderColor: cores.primaria },
   chipInativo: { opacity: 0.6 },
   textoChip: { fontSize: 15, color: cores.texto },
-  textoChipMarcado: { color: '#fff', fontWeight: '600' },
-  botao: { minHeight: 48, borderRadius: 8, backgroundColor: cores.destaque, alignItems: 'center', justifyContent: 'center' },
+  textoChipMarcado: { color: cores.sobrePrimaria, fontWeight: '600' },
+  botao: { minHeight: 48, borderRadius: 8, backgroundColor: cores.primaria, alignItems: 'center', justifyContent: 'center' },
   botaoInativo: { backgroundColor: cores.desabilitado },
   botaoPerigo: { backgroundColor: cores.erroTexto },
   botaoPressionado: { opacity: 0.85 },
-  textoBotao: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  link: { color: cores.destaque, fontSize: 15, textAlign: 'center', paddingVertical: 4 },
+  textoBotao: { color: cores.sobrePrimaria, fontSize: tipo.corpo, fontWeight: '600' },
+  link: { color: cores.primaria, fontSize: 15, textAlign: 'center', paddingVertical: 4 },
   linkInativo: { color: cores.desabilitado },
   mensagem: { padding: 12, borderRadius: 8 },
   erroFundo: { backgroundColor: cores.erroFundo },

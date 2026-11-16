@@ -337,8 +337,8 @@ export default function DetalheDenuncia() {
 const styles = StyleSheet.create({
   centro: { flex: 1, justifyContent: 'center', alignItems: 'stretch', gap: 12, backgroundColor: cores.fundo },
   padding: { padding: 24 },
-  suave: { color: cores.suave, textAlign: 'center' },
-  status: { fontSize: 14, color: cores.suave },
+  suave: { color: cores.textoSecundario, textAlign: 'center' },
+  status: { fontSize: 14, color: cores.textoSecundario },
   descricao: { minHeight: 120 },
   leitura: { gap: 4 },
   localizacao: { gap: 6 },

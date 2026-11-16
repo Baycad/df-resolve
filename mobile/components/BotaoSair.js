@@ -22,7 +22,7 @@ export function BotaoSair() {
       accessibilityState={{ disabled: saindo, busy: saindo }}
       hitSlop={8}
     >
-      <Text style={{ color: saindo ? cores.desabilitado : cores.destaque, fontSize: 16, fontWeight: '600' }}>
+      <Text style={{ color: saindo ? cores.desabilitado : cores.primaria, fontSize: 16, fontWeight: '600' }}>
         {saindo ? 'Saindo...' : 'Sair'}
       </Text>
     </Pressable>

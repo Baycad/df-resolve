@@ -99,5 +99,5 @@ export default function Cadastro() {
 }
 
 const styles = StyleSheet.create({
-  dica: { color: cores.suave, fontSize: 14 },
+  dica: { color: cores.textoSecundario, fontSize: 14 },
 });
