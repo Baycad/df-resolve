@@ -46,6 +46,9 @@ Repositório público: https://github.com/Baycad/df-resolve (branch `main`).
   - Um Ctrl+C no Flask não deixa linha no log; um novo início aparece como um novo bloco "Rotas disponíveis".
 - Links diretos para telas do app (`exp://192.168.0.9:8081/--/<rota>`): tocar no link numa conversa abre o Chrome, e não o app. Usar a opção "Enter URL manually" do Expo Go.
 - Conferência do banco em testes que alteram dados: antes do teste, salvar uma foto com `foto_banco.py <arquivo>.json salvar` (no scratchpad, um arquivo novo por teste; ele recusa sobrescrever) e, depois, `comparar`. A foto guarda só o SHA-256 de cada linha de todas as tabelas; a comparação mostra só tabela e id. O `foto_banco.py` fica no scratchpad da sessão e não é versionado: quando for necessário, deve ser recriado e mostrado ao usuário antes de rodar.
+- Em sequências de scripts de teste, rodar um passo por vez e parar na primeira divergência. Nunca encadear vários passos no mesmo comando sem parada entre eles (no 7C, o N6 rodou depois da falha do N5 porque estavam no mesmo comando).
+- Com o Flask ligado, o `Get-FileHash` do PowerShell recusa o banco em uso ("sendo usado por outro processo") depois de o Flask gravar algo. Para o SHA-256, ler o arquivo com um script Python (que abre o arquivo mesmo com o Flask ligado).
+- Os scripts e arquivos auxiliares do scratchpad podem sumir entre sessões: em 14/11/2026, às 16:26:42, as subpastas `fase5` e `fase6` da pasta temporária da sessão perderam os scripts (NÃO EXPLICADO; o usuário não mexeu nelas). Não depender de script antigo sem conferir que ele existe.
 
 ### Modo rede (testes com celular)
 
@@ -75,6 +78,7 @@ df_resolve/
   routes/denuncia_routes.py  /denuncias/*
   limiter.py                 Flask-Limiter (limites por IP em /auth/login, /auth/token e /auth/register)
   auth_tokens.py             tokens do app: emissão, leitura do Bearer, revogação
+  migracoes/0001_campos_denuncia.py  migração manual: categoria, latitude e longitude; grava user_version 1
   instance/denuncias.db      BANCO EM USO (não versionado)
   denuncias.db               BANCO LEGADO, não usado pelo código; preservar
 frontend/                    web antigo (login, register, denuncia funcionam; index.html quebrado)
@@ -82,17 +86,18 @@ instance/                    pasta vazia na raiz, sem uso
 mobile/                      app Expo SDK 58, Expo Router, JavaScript
   app/_layout.js             SessaoProvider, splash e Stack.Protected
   app/(app)/_layout.js       Stack logado, com botão Sair
-  app/(app)/index.js         Minhas Denúncias (rota "/"): id maior primeiro, recarga ao ganhar foco, trava de toque duplo
-  app/(app)/nova.js          nova denúncia (POST /denuncias/), com contadores e trava de toques repetidos
-  app/(app)/denuncia/[id].js detalhe, edição (PATCH só dos campos alterados) e exclusão com confirmação; só leitura se não for Pendente
+  app/(app)/index.js         Minhas Denúncias (rota "/"): id maior primeiro, recarga ao ganhar foco, trava de toque duplo, rótulo da categoria no cartão
+  app/(app)/nova.js          nova denúncia (POST /denuncias/): categoria obrigatória no app, contadores, localização opcional, trava de toques repetidos
+  app/(app)/denuncia/[id].js detalhe, edição (PATCH só dos campos alterados) e exclusão com confirmação; só leitura se não for Pendente (com "Categoria" e "Localização")
   app/login.js               login por POST /auth/token
   app/cadastro.js            cadastro com confirmação de senha e login automático
   app/diagnostico.js         teste de conexão (GET /auth/check), sem login
-  components/ui.js           Tela, Campo, Botao, Link, Mensagem
+  components/ui.js           Tela (insets.bottom e keyboardVerticalOffset = altura do cabeçalho), Campo, SeletorCategoria, Botao, Link, Mensagem
   components/BotaoSair.js
   contexts/sessao.js         sessão; token só em memória e no expo-secure-store
   services/api.js            requisições, Bearer, tempo limite (8 s; 5 s no logout), erros
-  utils/validacao.js         regras copiadas de auth_routes.py e denuncia_routes.py (limites 100/200/2000, mesma ordem da tela)
+  utils/validacao.js         regras copiadas de auth_routes.py e denuncia_routes.py (limites 100/200/2000, CATEGORIAS, limites e 5 casas da localização)
+  utils/localizacao.js       expo-location: permissão de primeiro plano, GPS ligado, posição com limite de 15 s; devolve { localizacao } ou { aviso }
   .env.example               modelo versionado
   .env                       EXPO_PUBLIC_API_URL (não versionado)
 requirements.txt
@@ -101,7 +106,10 @@ CLAUDE.md
 ```
 
 - `EXPO_PUBLIC_API_URL` fica embutida no app: nunca colocar segredos em variáveis `EXPO_PUBLIC_*`.
-- Versões no `mobile/package.json`: expo ~58.0.22, react 19.3.0, react-dom 19.3.0, react-native 0.88.1, expo-router ~58.0.29, expo-secure-store ~58.0.2. Node v22.20.0, npm 10.9.3.
+- Versões no `mobile/package.json`: expo ~58.0.22, react 19.3.0, react-dom 19.3.0, react-native 0.88.1, expo-router ~58.0.29, expo-secure-store ~58.0.2, expo-location ~58.0.21. Node v22.20.0, npm 10.9.3.
+- `mobile/app.json` não tem o plugin do `expo-location`: ele só vale para um app instalado (o Expo Go usa as próprias permissões). PROPOSTA para quando houver build: `["expo-location", { "locationWhenInUsePermission": "O DF Resolve usa a sua localização só quando você toca em Usar minha localização.", "isAndroidBackgroundLocationEnabled": false, "isIosBackgroundLocationEnabled": false }]` (testado só em memória, sem o app.json do projeto).
+- Android de borda a borda (obrigatório no SDK 58): a `Tela` soma `insets.bottom` ao padding de baixo (L1) e usa `keyboardVerticalOffset = useHeaderHeight()` de `expo-router/react-navigation` (L2). A lista soma `insets.bottom` no `FlatList`.
+- Export de referência (`expo export`, Android): 1165 módulos (7C). Antes: 1156 (Fase 6 e 7B sem L2), 1157 (L2, NÃO MEDIDO: o módulo a mais deduzido é o index.js de `expo-router/react-navigation`).
 
 ## Dependências instaladas no venv (verificado)
 
@@ -113,9 +121,11 @@ Flask-Limiter 4.1.1, com dependências fixadas no requirements: limits 5.8.0, or
 
 - `User`: id, username (String 80, único), password (String 255 no modelo, hash `scrypt`).
   O banco em uso foi criado com VARCHAR(120); o SQLite não impõe o tamanho e grava hashes de 162 caracteres (testado). Outro banco exigiria migração.
-- `Denuncia`: id, titulo (100), descricao (Text), endereco (200), status (padrão "Pendente"), user_id (FK user.id).
+- `Denuncia`: id, titulo (100), descricao (Text), endereco (200), status (padrão "Pendente", só no Python; o banco não tem valor padrão), user_id (FK user.id), categoria (String 30), latitude (Float), longitude (Float). As três últimas aceitam NULL (denúncias antigas) e vieram da migração 0001.
+- A chave primária não tem `AUTOINCREMENT`: quando a denúncia de maior id é excluída, o número volta a ser usado (visto com a 28 e a 30 na Fase 7).
+- Banco em uso: `PRAGMA user_version` = 1 depois da migração 0001. Um banco criado do zero pelo `create_all` nasce com as três colunas, mas com `user_version` 0; nesse banco a 0001 para sem alterar nada (estado "colunas presentes com versão 0"). Pendência para uma futura migração 0002.
 - `AuthToken` (tabela `auth_token`): id, token_hash (String 64, único, SHA-256 em hex), user_id (FK user.id, com índice), created_at, expires_at, revoked_at (vazio enquanto ativo). Datas em UTC sem fuso. O token em texto nunca é gravado.
-- Não existem: data de criação, categoria, foto, localização, papel de administrador.
+- Não existem: data de criação, foto, papel de administrador.
 
 ## API atual (verificado e testado)
 
@@ -127,13 +137,13 @@ Todas as respostas de erro usam JSON no formato `{"message": "..."}`.
 | POST | /auth/login | não | username, password (cria sessão por cookie, Flask-Login) |
 | POST | /auth/logout | sim | |
 | GET | /auth/check | não | |
-| POST | /denuncias/ | sim | titulo (até 100), descricao (até 2000), endereco (até 200) |
+| POST | /denuncias/ | sim | titulo (até 100), descricao (até 2000), endereco (até 200); opcionais: categoria e o par latitude/longitude (regras abaixo) |
 | GET | /denuncias/ | sim | lista apenas as denúncias do usuário logado |
 | POST | /auth/token | não | username, password. 200 com `token`, `token_type: Bearer` e `expires_at` (30 dias), `Cache-Control: no-store`. Não cria cookie |
 | POST | /auth/token/revoke | Bearer | revoga o token enviado; inválido, expirado ou revogado: 401 |
 | GET | /auth/me | sim | `{id, username}` |
-| GET | /denuncias/<id> | sim | `{id, titulo, descricao, endereco, status}`. Denúncia de outro dono ou inexistente: 404 igual |
-| PATCH | /denuncias/<id> | sim | parcial: só titulo, descricao e endereco (mesmos limites, com `strip`). Campo fora desses: 400. Corpo sem nenhum campo: 400. Status diferente de "Pendente": 409 (antes de validar o corpo) |
+| GET | /denuncias/<id> | sim | `{id, titulo, descricao, endereco, status, categoria, latitude, longitude}` (null nas antigas). Denúncia de outro dono ou inexistente: 404 igual |
+| PATCH | /denuncias/<id> | sim | parcial: titulo, descricao, endereco (mesmos limites, com `strip`), categoria e o par latitude/longitude. Campo fora desses: 400 "Só é possível editar título, descrição, endereço, categoria e localização." Corpo sem nenhum campo: 400. Status diferente de "Pendente": 409 (antes de validar o corpo) |
 | DELETE | /denuncias/<id> | sim | exclusão física. Status diferente de "Pendente": 409 |
 
 - "Auth sim" aceita cookie de sessão ou `Authorization: Bearer <token>` (pelo `request_loader`). Com os dois, vale a sessão.
@@ -144,6 +154,9 @@ Todas as respostas de erro usam JSON no formato `{"message": "..."}`.
 - Não existe rota de alteração de status. Nos testes, o status só mudou por script autorizado (`status_denuncia.py`).
 - Id que não é número inteiro (`/denuncias/abc`, `/denuncias/-1`): 404 no GET e 405 JSON no PATCH e no DELETE, por causa da rota de arquivos do frontend em `/` (`static_url_path="/"`). Contrato aceito no 6A. O app recusa esses ids antes de chamar o servidor.
 - `POST /denuncias/` ignora campos extras (`status`, `user_id`, `id`): a denúncia nasce Pendente e do usuário logado.
+- Categoria: opcional na API, obrigatória no app ("Escolha uma categoria."). Chaves: `buraco`, `iluminacao`, `lixo`, `calcada`, `sinalizacao`, `arvore`, `esgoto`, `outros` (os rótulos ficam no app). Quando vem no corpo, tem que ser exatamente uma das chaves: `null`, vazio, maiúsculas, espaços e qualquer tipo que não seja texto dão 400 "Categoria inválida. Use uma destas: ...". Não dá para apagar a categoria pela API.
+- Localização: opcional e sempre em par. Só um dos dois, ou um `null` com um número: 400 "Envie latitude e longitude juntas.". Texto, bool, NaN, Infinity, 1e400, inteiro enorme, lista, objeto ou fora de -90 a 90 / -180 a 180: 400 "Localização inválida.". Os limites valem. O servidor arredonda a 5 casas. Os dois `null` removem no PATCH e valem como "sem localização" no POST.
+- A localização é dado pessoal: só é enviada com um toque explícito em "Usar minha localização", e só o dono a vê.
 - CORS liberado só para `http://127.0.0.1:5500` (Live Server). O app nativo não depende de CORS.
 - Limites por IP (`request.remote_addr`; `X-Forwarded-For` é ignorado):
   - POST /auth/login e POST /auth/token, com contadores compartilhados (`shared_limit`, escopos `login_total` e `login_falhas`): 5 falhas (401) por minuto e 20 por hora; 30 requisições por minuto no total.
@@ -203,6 +216,29 @@ Todas as respostas de erro usam JSON no formato `{"message": "..."}`.
     - usuários `fase6_teste` e `fase6_outro`, sem senha conhecida (como a `fase4_teste`);
     - denúncias 12 e 18 (`fase6_teste`, Pendente), 14 (`fase6_teste`, "Em análise" por script), 15 (`fase6_outro`), 16 e 17 (`fase5_teste`, pelo site), 20 (`fase5_teste`, "Em análise" por script no C7) e 21 (`fase5_teste`, título "Teste C11"). A 13 e a 19 foram excluídas nos testes;
     - tokens 14 a 22, todos revogados (17, 20 e 22 por script, com autorização). Ao fim da fase, 0 tokens ativos em todas as contas, e 0 tokens nos logs do 6C e do 6D.
+- Fase 7 (novos campos: categoria e GPS): implementada e testada de 2026-11-11 a 2026-11-16.
+  - Decisões: D1 a Fase 7 passou a ser a dos novos campos (estados, mensagens e acabamento viram a Fase 8); D2 migração por script manual versionado, sem dependência nova; D3 categoria obrigatória no app e opcional na API; D5 qualquer coordenada válida; D6 5 casas; D7 GPS sempre opcional e explícito; D13 sem `precisao_m`. Foto (D8 a D12) adiada.
+  - Backup antes da fase: `X:\programação\DF-RESOLVE-BACKUPS\2026-11-11-antes-fase7` (SHA256 conferido pelo usuário).
+  - Hashes de referência do banco em uso: `62F2B11A50A97B78493F59080C917F5569AABA758FB26F256594EF2020D378EC` antes da Fase 7; `61257765538482B2B59A6893BCD966250C138F191D580B8C5FD0614FA137EBDA` logo depois da migração 0001. Banco legado sempre `77D1C28D999ED978F2BBEF44905D850C3CAD7AC0C65E284A9E49DCEAA018290D`.
+  - 7.0 (diagnóstico, só leitura) e 7A (migração 0001 e categoria no backend), commit `e42bd71`.
+    - Ensaio em cópias E0 a E8 aprovado: rodar duas vezes (idempotente), estados parciais (para sem alterar nada, inclusive o `user_version`), hash das colunas antigas igual, código antigo sobre a cópia migrada, reversão por cópia e por `DROP COLUMN`, e falha forçada antes do COMMIT (tudo desfeito). A migração real deu um arquivo idêntico ao do ensaio.
+    - Reversão principal: reverter o commit do código (as colunas extras com NULL não afetam o código antigo); o backup protege contra corrupção.
+    - Testes K0 a K12 aprovados (K0 com o código antigo sobre o banco migrado; K11 no site antigo).
+  - 7B (categoria no app), commit `705d319`: testes G1 a G15, L1 e L2 aprovados.
+    - G5 feito na denúncia 28, e não na 21. O G13 e o G7 da primeira tentativa ficaram só pela tela, sem pedidos no log (NÃO VERIFICADO); repetidos e aprovados pelo log.
+    - L1: na Nova denúncia e no Detalhe editável, o último botão ficava atrás da barra de navegação (três botões) do Android de borda a borda. Corrigido com `insets.bottom` na `Tela` e na lista.
+    - L2: com o teclado aberto, o fim da tela ficava atrás do teclado, porque o `KeyboardAvoidingView` não contava o cabeçalho. Corrigido com `keyboardVerticalOffset = useHeaderHeight()`; com o teclado aberto sobra um espaço vazio médio embaixo.
+    - O app foi reaberto (`GET /auth/me`) antes de vários testes; a causa não foi investigada.
+  - 7C (GPS), na branch `fase7c-gps` (mergeada no `main` (avanço simples) e enviada ao GitHub em 2026-11-16): commits `5ebf965` (API) e `e822cd8` (app).
+    - 7C-A: testes H0 a H14 aprovados (curl, site antigo e busca de tokens).
+    - Instalação: `expo-location ~58.0.21`, que subiu dois pacotes indiretos, `@expo/image-utils` 0.12.6 para 0.12.7 e `@expo/require-utils` 58.0.5 para 58.0.6 (aceitos em 2026-11-12, com o export sem aviso novo).
+    - 7C-B: testes I1 a I13 aprovados, exceto o I11. Ressalvas NÃO VERIFICADAS do I7 ao I9: o corpo de cada PATCH (o log não mostra), os estados intermediários (só o estado final foi lido) e a localização igual no I9. I11 (tempo esgotado): NÃO TESTADO, não dá para provocar à mão. I4 a I6 (permissão negada, bloqueada e GPS desligado) aprovados só pelo relato, sem os textos anotados.
+    - Banco criado do zero (cópia do pacote no scratchpad, test_client, sem servidor): N2 a N4 e N6 aprovados (as três colunas existem e a API grava e lê a localização). N5 (a 0001 sobre esse banco): NÃO VERIFICADO por falha do script auxiliar, não da migração; o `user_version` ficou 0.
+  - Dados de teste criados (só podem ser removidos com autorização do usuário; as senhas das contas novas ficavam só em arquivos do scratchpad, que serão apagados na limpeza):
+    - usuários `fase7_teste` (14), `fase7_outro` (15), `fase7c_teste` (16) e `fase7c_outro` (17);
+    - denúncias 22 a 27 (`fase7_teste`; a 25 "Em análise"), 28 (`fase5_teste`, pelo site; reaproveitou o id), 29 (`fase5_teste`), 30 a 35 e 37 (`fase7c_teste`; a 30 reaproveitou o id da excluída no G9; a 31 "Em análise"), 36 (`fase7c_outro`), 38 (`fase5_teste`, pelo site no H13; reaproveitou o id da excluída no H11) e 39 a 41 (`fase5_teste`, a 39 com a localização real de teste do usuário, que não deve ser repetida em documentos);
+    - a 21 (`fase5_teste`) ganhou a categoria `calcada`, o título "Teste C11 I9" e localização;
+    - tokens 23 a 32, todos revogados. Ao fim da fase, 0 tokens ativos em todas as contas e 0 tokens nos logs.
 
 ## Problemas conhecidos
 
@@ -219,6 +255,8 @@ Todas as respostas de erro usam JSON no formato `{"message": "..."}`.
 - A exclusão de denúncia é física (sem histórico nem como desfazer). Avaliar exclusão lógica.
 - Configurar explicitamente o `SESSION_COOKIE_SAMESITE` (hoje vale o padrão do navegador). As rotas `PATCH` e `DELETE` também aceitam o cookie de sessão do site.
 - Se a criação de uma denúncia passar dos 8 s mas o servidor gravar, o app mostra erro e um novo toque cria uma duplicata.
+- A localização é dado pessoal (LGPD): rever o aviso ao usuário, o tempo de guarda e quem pode ver antes de produção.
+- Num app instalado, incluir o plugin do `expo-location` no `app.json` (PROPOSTA em "Estrutura verificada").
 
 ### Demais
 - 4 contas continuam com `sha256` até fazerem login. Werkzeug 3 remove o `sha256`: atualizar antes da conversão impede o login dessas contas.
@@ -230,29 +268,39 @@ Todas as respostas de erro usam JSON no formato `{"message": "..."}`.
 - Aviso do Git `unable to find all commit-graph files`: é só cache; pode ser recriado com `git commit-graph write --reachable` mediante autorização.
 - App mobile, revisar na próxima atualização do SDK do Expo:
   - `npm audit` aponta 8 vulnerabilidades moderadas indiretas em ferramentas de desenvolvimento (eram 11; a causa da mudança não foi investigada). Não vão para o app. Não usar `npm audit fix`, que mudaria versões fixadas pelo SDK.
-- Revisar na Fase 7:
+- Revisar na Fase 8:
   - As mensagens de erro do app usam termos técnicos ("Flask", "modo rede").
   - No `PATCH`, um título numérico (`123`) ou `null` recebe "O campo título não pode ficar vazio.", que não descreve bem o caso.
   - Na tela de detalhe, a mensagem de erro de validação continua visível depois que o campo é corrigido.
+- Migração 0002 (pendência): um banco criado do zero pelo `create_all` fica com `user_version` 0, e a 0001 para sem alterar nada nele. A próxima migração precisa tratar esse caso (ou a 0001 passar a só marcar a versão quando as três colunas já existirem).
+- No site antigo, depois de criar uma denúncia, o log mostra dois `GET /denuncias/` seguidos (K11 e H13), e o `denuncia.js` faz só uma recarga. NÃO VERIFICADO, sem indicação de erro.
+- Scripts auxiliares das subpastas `fase5` e `fase6` da pasta temporária da sessão sumiram (alteração em 2026-11-14 às 16:26:42). NÃO EXPLICADO.
 
-## Próxima etapa: Fase 7 (PROPOSTA, aguardando plano)
+## Próxima etapa: fechamento da Fase 7 e Fase 8 (PROPOSTA)
 
-Estados de carregamento, vazio e erro, revisão das mensagens e acabamento.
+Apresentação do projeto: 2026-11-28 (o professor adiou a data em uma semana; era 2026-11-21).
+
+- Fase 8: estados de carregamento, vazio e erro, revisão das mensagens e acabamento.
+- Guia em PDF.
+- Limpeza do scratchpad e dos logs de teste, com autorização.
 
 ## Roadmap (PROPOSTA)
 
-Decidido: app em `mobile/` neste repositório, navegação com Expo Router, JavaScript, token opaco. A primeira versão faz só o que o backend já faz (cadastro, login, logout, criar, listar, ver, editar e excluir denúncias), sem foto, GPS ou categoria.
+Decidido: app em `mobile/` neste repositório, navegação com Expo Router, JavaScript, token opaco. A primeira versão faz cadastro, login, logout, criar, listar, ver, editar e excluir denúncias, com categoria e localização opcional por GPS (Fase 7), sem foto.
 
 - Fase 3: esqueleto do app Expo em `mobile/` e teste de conexão com o Flask pela rede Wi-Fi, sem login. Concluída.
 - Fase 4: autenticação por token para o app. Cria tabela nova: exige backup e plano antes. Proposta: token opaco aleatório, salvo como hash em `auth_token` (expiração e revogação), lido por `request_loader` do Flask-Login; rotas `/auth/token`, `/auth/token/revoke`, `/auth/me`; no app, token em `expo-secure-store` (nunca AsyncStorage). O fluxo web por cookie continua igual. Concluída.
 - Fase 5: telas de cadastro, login e logout. Concluída.
 - Fase 6: criar, listar, ver, editar e excluir denúncias (o `GET /denuncias/<id>` com checagem de dono entrou aqui). Concluída.
-- Fase 7: estados de carregamento, vazio e erro, revisão das mensagens e acabamento.
+- Fase 7: novos campos. Categoria (7A e 7B) no `main`; GPS (7C) na branch `fase7c-gps`, mergeada no `main`. Concluída.
+- Fase 8: estados de carregamento, vazio e erro, revisão das mensagens e acabamento.
+- Foto nas denúncias: adiada (decisões D8 a D12 em aberto: quantidade, tipos, Pillow, limite de envios, `.gitignore`).
 
 ## Decisões pendentes do usuário
 
 1. Destino do `index.html`: ele é servido em `/` e confunde quem abre a raiz.
 2. Quem altera o status das denúncias (administrador?).
-3. Novos campos para versões futuras: data, categoria, região administrativa, foto, GPS.
-4. Ferramenta de migração (Flask-Migrate ou scripts manuais).
-5. Quando atualizar dependências. O `expo install --check` aponta 5 patches do SDK 58: `expo` 58.0.23, `expo-constants` 58.0.15, `expo-linking` 58.0.16, `expo-router` 58.0.30 e `react-native-safe-area-context` 5.11.1.
+3. Novos campos para versões futuras: data, região administrativa, foto (categoria e GPS entraram na Fase 7).
+4. Ferramenta de migração: decidido script manual versionado (D2, Fase 7). Rever se o projeto crescer.
+5. Quando atualizar dependências (não antes da apresentação de 2026-11-28). O `expo install --check` de 2026-11-16 aponta: `expo` 58.0.25, `expo-constants` 58.0.16, `expo-linking` 58.0.17, `expo-location` 58.0.22, `expo-router` 58.0.31, `expo-secure-store` 58.0.3, `expo-status-bar` 58.0.5 e `react-native-safe-area-context` 5.11.1. O aviso do Metro passou a dizer "58.0.22 → ~58.0.25" e "7 other packages".
+6. Decidido: merge da `fase7c-gps` no `main` feito em 2026-11-16.
