@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -76,11 +77,23 @@ export function Tela({ children }) {
 
 // React 19: "ref" chega como prop comum.
 // "ajuda" mostra um texto curto abaixo do campo; "estilo" complementa o estilo da entrada.
+// O rótulo visível fica ligado ao campo (accessibilityLabelledBy, que o React Native só aplica no Android):
+// o TalkBack anuncia o nome do campo sem trocar o texto digitado por uma descrição. O useId dá um id
+// único a cada Campo, mesmo com vários na mesma tela.
 export function Campo({ rotulo, ref, ajuda, estilo, ...props }) {
+  const idRotulo = useId();
   return (
     <View style={styles.campo}>
-      <Text style={styles.rotulo}>{rotulo}</Text>
-      <TextInput ref={ref} style={[styles.entrada, estilo]} placeholderTextColor={cores.textoSecundario} {...props} />
+      <Text nativeID={idRotulo} style={styles.rotulo}>
+        {rotulo}
+      </Text>
+      <TextInput
+        ref={ref}
+        style={[styles.entrada, estilo]}
+        placeholderTextColor={cores.textoSecundario}
+        accessibilityLabelledBy={idRotulo}
+        {...props}
+      />
       {ajuda ? <Text style={styles.ajuda}>{ajuda}</Text> : null}
     </View>
   );
@@ -140,9 +153,11 @@ export function Botao({ titulo, onPress, carregando = false, desabilitado = fals
   );
 }
 
+// Alvo de toque de 48 dp de altura (mínimo do Android) pela própria área do Pressable, sem hitSlop:
+// o hitSlop não muda a área que o TalkBack mostra.
 export function Link({ titulo, onPress, desabilitado = false }) {
   return (
-    <Pressable onPress={onPress} disabled={desabilitado} accessibilityRole="link" hitSlop={8}>
+    <Pressable onPress={onPress} disabled={desabilitado} accessibilityRole="link" style={styles.alvoLink}>
       <Text style={[styles.link, desabilitado && styles.linkInativo]}>{titulo}</Text>
     </Pressable>
   );
@@ -173,31 +188,32 @@ const styles = StyleSheet.create({
     fontSize: tipo.corpo,
     color: cores.texto,
   },
-  // Alvo de toque de 44 pt de altura em cada chip.
+  // Alvo de toque de 48 dp de altura em cada chip (mínimo do Android); raio de metade da altura.
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
-    minHeight: 44,
+    minHeight: 48,
     justifyContent: 'center',
     paddingHorizontal: 14,
-    borderRadius: 22,
+    borderRadius: 24,
     borderWidth: 1,
     borderColor: cores.borda,
     backgroundColor: cores.fundo,
   },
   chipMarcado: { backgroundColor: cores.primaria, borderColor: cores.primaria },
   chipInativo: { opacity: 0.6 },
-  textoChip: { fontSize: 15, color: cores.texto },
+  textoChip: { fontSize: tipo.corpo, color: cores.texto },
   textoChipMarcado: { color: cores.sobrePrimaria, fontWeight: '600' },
   botao: { minHeight: 48, borderRadius: 8, backgroundColor: cores.primaria, alignItems: 'center', justifyContent: 'center' },
   botaoInativo: { backgroundColor: cores.desabilitado },
   botaoPerigo: { backgroundColor: cores.erroTexto },
   botaoPressionado: { opacity: 0.85 },
   textoBotao: { color: cores.sobrePrimaria, fontSize: tipo.corpo, fontWeight: '600' },
-  link: { color: cores.primaria, fontSize: 15, textAlign: 'center', paddingVertical: 4 },
+  alvoLink: { minHeight: 48, justifyContent: 'center' },
+  link: { color: cores.primaria, fontSize: tipo.corpo, textAlign: 'center' },
   linkInativo: { color: cores.desabilitado },
   mensagem: { padding: 12, borderRadius: 8 },
   erroFundo: { backgroundColor: cores.erroFundo },
-  erroTexto: { color: cores.erroTexto, fontSize: 15 },
+  erroTexto: { color: cores.erroTexto, fontSize: tipo.corpo },
   avisoFundo: { backgroundColor: cores.avisoFundo },
-  avisoTexto: { color: cores.avisoTexto, fontSize: 15 },
+  avisoTexto: { color: cores.avisoTexto, fontSize: tipo.corpo },
 });

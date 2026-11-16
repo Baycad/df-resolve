@@ -14,13 +14,14 @@ export function BotaoSair() {
     await sair(); // sempre termina: o token é apagado mesmo sem rede
   }
 
+  // Alvo de 48 × 48 dp (mínimo do Android) pela área do Pressable, sem hitSlop e sem mudar o texto.
   return (
     <Pressable
       onPress={aoTocar}
       disabled={saindo}
       accessibilityRole="button"
       accessibilityState={{ disabled: saindo, busy: saindo }}
-      hitSlop={8}
+      style={{ minHeight: 48, minWidth: 48, alignItems: 'center', justifyContent: 'center' }}
     >
       <Text style={{ color: saindo ? cores.desabilitado : cores.primaria, fontSize: 16, fontWeight: '600' }}>
         {saindo ? 'Saindo...' : 'Sair'}
