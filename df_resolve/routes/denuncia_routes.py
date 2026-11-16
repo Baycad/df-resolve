@@ -1,3 +1,5 @@
+import math
+
 from flask import Blueprint, abort, request, jsonify
 from flask_login import login_required, current_user
 
@@ -15,8 +17,14 @@ CAMPOS_DENUNCIA = {
 STATUS_EDITAVEL = 'Pendente'
 # Chaves de categoria gravadas no banco (D4). Os rótulos ficam no app (mobile/utils/validacao.js).
 CATEGORIAS = ('buraco', 'iluminacao', 'lixo', 'calcada', 'sinalizacao', 'arvore', 'esgoto', 'outros')
-CAMPOS_EDITAVEIS = tuple(CAMPOS_DENUNCIA) + ('categoria',)
 MENSAGEM_CATEGORIA = 'Categoria inválida. Use uma destas: ' + ', '.join(CATEGORIAS) + '.'
+# Localização (7C): opcional (D7), sempre o par latitude e longitude, em graus, arredondado a 5 casas (D6).
+# Campo: maior valor absoluto aceito (D5: qualquer coordenada válida).
+LIMITES_LOCALIZACAO = {'latitude': 90, 'longitude': 180}
+CASAS_LOCALIZACAO = 5
+MENSAGEM_LOCALIZACAO_PAR = 'Envie latitude e longitude juntas.'
+MENSAGEM_LOCALIZACAO = 'Localização inválida.'
+CAMPOS_EDITAVEIS = tuple(CAMPOS_DENUNCIA) + ('categoria',) + tuple(LIMITES_LOCALIZACAO)
 
 
 def _ler_json():
@@ -29,15 +37,51 @@ def _erro(mensagem, status=400):
     return jsonify({'message': mensagem}), status
 
 
+def _validar_localizacao(dados):
+    """Retorna (valores, None) ou (None, mensagem de erro).
+
+    valores é {} quando nenhum dos dois campos veio; {'latitude': None, 'longitude': None} quando os
+    dois vieram null (sem localização no POST, remover no PATCH, C1 e C2); ou os dois números já
+    arredondados. Só um dos dois, ou um null com um número, dá MENSAGEM_LOCALIZACAO_PAR.
+    """
+    presentes = [campo for campo in LIMITES_LOCALIZACAO if campo in dados]
+    if not presentes:
+        return {}, None
+    if len(presentes) != len(LIMITES_LOCALIZACAO):
+        return None, MENSAGEM_LOCALIZACAO_PAR
+    nulos = [campo for campo in LIMITES_LOCALIZACAO if dados[campo] is None]
+    if len(nulos) == len(LIMITES_LOCALIZACAO):
+        return {campo: None for campo in LIMITES_LOCALIZACAO}, None
+    if nulos:
+        return None, MENSAGEM_LOCALIZACAO_PAR
+
+    valores = {}
+    for campo, limite in LIMITES_LOCALIZACAO.items():
+        valor = dados[campo]
+        # bool é subclasse de int no Python: true e false precisam ser recusados à parte.
+        if isinstance(valor, bool) or not isinstance(valor, (int, float)):
+            return None, MENSAGEM_LOCALIZACAO
+        # Um inteiro enorme estouraria na conversão para float; a faixa já o recusa antes.
+        if isinstance(valor, int) and abs(valor) > limite:
+            return None, MENSAGEM_LOCALIZACAO
+        valor = float(valor)
+        # O leitor de JSON do Python aceita NaN, Infinity e 1e400 (que vira infinito).
+        if not math.isfinite(valor) or abs(valor) > limite:
+            return None, MENSAGEM_LOCALIZACAO
+        valores[campo] = round(valor, CASAS_LOCALIZACAO)
+    return valores, None
+
+
 def _validar_campos(dados, parcial):
     """Retorna (valores, None) ou (None, mensagem de erro).
 
-    No cadastro (parcial=False) os três campos de texto são obrigatórios, a categoria é opcional
-    e outros campos são ignorados, como antes. Na edição (parcial=True) só os campos enviados são
-    validados, e campos fora de título, descrição, endereço e categoria são recusados.
+    No cadastro (parcial=False) os três campos de texto são obrigatórios, a categoria e a localização
+    são opcionais e outros campos são ignorados, como antes. Na edição (parcial=True) só os campos
+    enviados são validados, e campos fora de título, descrição, endereço, categoria, latitude e
+    longitude são recusados.
     """
     if parcial and set(dados) - set(CAMPOS_EDITAVEIS):
-        return None, 'Só é possível editar título, descrição, endereço e categoria.'
+        return None, 'Só é possível editar título, descrição, endereço, categoria e localização.'
 
     valores = {}
     for campo, (nome, limite) in CAMPOS_DENUNCIA.items():
@@ -60,8 +104,13 @@ def _validar_campos(dados, parcial):
             return None, MENSAGEM_CATEGORIA
         valores['categoria'] = valor
 
+    localizacao, problema = _validar_localizacao(dados)
+    if problema:
+        return None, problema
+    valores.update(localizacao)
+
     if parcial and not valores:
-        return None, 'Envie ao menos um campo: titulo, descricao, endereco ou categoria.'
+        return None, 'Envie ao menos um campo: titulo, descricao, endereco, categoria ou latitude e longitude.'
     return valores, None
 
 
@@ -72,8 +121,10 @@ def _como_json(d):
         'descricao': d.descricao,
         'endereco': d.endereco,
         'status': d.status,
-        # null nas denúncias antigas. Latitude e longitude só entram na API no bloco 7C.
+        # null nas denúncias antigas, e na localização das que não têm.
         'categoria': d.categoria,
+        'latitude': d.latitude,
+        'longitude': d.longitude,
     }
 
 
@@ -105,6 +156,8 @@ def criar_denuncia():
         descricao=valores['descricao'],
         endereco=valores['endereco'],
         categoria=valores.get('categoria'),  # sem categoria no corpo: NULL
+        latitude=valores.get('latitude'),  # sem localização (ou os dois null): NULL
+        longitude=valores.get('longitude'),
         # O dono vem sempre da sessão, nunca do corpo da requisição.
         user_id=current_user.id
     )
