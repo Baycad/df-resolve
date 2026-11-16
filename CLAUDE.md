@@ -47,6 +47,7 @@ Repositório público: https://github.com/Baycad/df-resolve (branch `main`).
 - Links diretos para telas do app (`exp://192.168.0.9:8081/--/<rota>`): tocar no link numa conversa abre o Chrome, e não o app. Usar a opção "Enter URL manually" do Expo Go.
 - Conferência do banco em testes que alteram dados: antes do teste, salvar uma foto com `foto_banco.py <arquivo>.json salvar` (no scratchpad, um arquivo novo por teste; ele recusa sobrescrever) e, depois, `comparar`. A foto guarda só o SHA-256 de cada linha de todas as tabelas; a comparação mostra só tabela e id. O `foto_banco.py` fica no scratchpad da sessão e não é versionado: quando for necessário, deve ser recriado e mostrado ao usuário antes de rodar.
 - Em sequências de scripts de teste, rodar um passo por vez e parar na primeira divergência. Nunca encadear vários passos no mesmo comando sem parada entre eles (no 7C, o N6 rodou depois da falha do N5 porque estavam no mesmo comando).
+- Testes no celular (prática da Fase 8): um item por vez, uma resposta por item, e parar na primeira divergência. Motivo: no passo 2 da Fase 8, com dois testes combinados, o W7 foi dado como aprovado, mas não aparecia no log (a tela de detalhe sempre faz o GET ao abrir).
 - Com o Flask ligado, o `Get-FileHash` do PowerShell recusa o banco em uso ("sendo usado por outro processo") depois de o Flask gravar algo. Para o SHA-256, ler o arquivo com um script Python (que abre o arquivo mesmo com o Flask ligado).
 - Os scripts e arquivos auxiliares do scratchpad podem sumir entre sessões: em 14/11/2026, às 16:26:42, as subpastas `fase5` e `fase6` da pasta temporária da sessão perderam os scripts (NÃO EXPLICADO; o usuário não mexeu nelas). Não depender de script antigo sem conferir que ele existe.
 
@@ -86,14 +87,14 @@ instance/                    pasta vazia na raiz, sem uso
 mobile/                      app Expo SDK 58, Expo Router, JavaScript
   app/_layout.js             SessaoProvider, splash e Stack.Protected
   app/(app)/_layout.js       Stack logado, com botão Sair
-  app/(app)/index.js         Minhas Denúncias (rota "/"): id maior primeiro, recarga ao ganhar foco, trava de toque duplo, rótulo da categoria no cartão
+  app/(app)/index.js         Minhas Denúncias (rota "/"): id maior primeiro, recarga ao ganhar foco, trava de toque duplo; cartão com selo de status e categoria no topo; Nova denúncia em rodapé fixo
   app/(app)/nova.js          nova denúncia (POST /denuncias/): categoria obrigatória no app, contadores, localização opcional, trava de toques repetidos
-  app/(app)/denuncia/[id].js detalhe, edição (PATCH só dos campos alterados) e exclusão com confirmação; só leitura se não for Pendente (com "Categoria" e "Localização")
+  app/(app)/denuncia/[id].js detalhe, edição (PATCH só dos campos alterados) e exclusão com confirmação; só leitura se não for Pendente (com "Categoria" e "Localização"); "Status" em selo no topo, com rótulo em 16
   app/login.js               login por POST /auth/token
   app/cadastro.js            cadastro com confirmação de senha e login automático
   app/diagnostico.js         teste de conexão (GET /auth/check), sem login
-  components/ui.js           Tela (insets.bottom e keyboardVerticalOffset = altura do cabeçalho), Campo, SeletorCategoria, Botao, Link, Mensagem
-  components/BotaoSair.js
+  components/ui.js           cores (papéis da paleta), tipo (escala), Tela (insets.bottom e keyboardVerticalOffset = altura do cabeçalho), Campo (rótulo por accessibilityLabelledBy), SeletorCategoria, Botao, Link, Mensagem, SeloStatus
+  components/BotaoSair.js    Sair no cabeçalho (alvo de 48 dp)
   contexts/sessao.js         sessão; token só em memória e no expo-secure-store
   services/api.js            requisições, Bearer, tempo limite (8 s; 5 s no logout), erros
   utils/validacao.js         regras copiadas de auth_routes.py e denuncia_routes.py (limites 100/200/2000, CATEGORIAS, limites e 5 casas da localização)
@@ -101,15 +102,16 @@ mobile/                      app Expo SDK 58, Expo Router, JavaScript
   .env.example               modelo versionado
   .env                       EXPO_PUBLIC_API_URL (não versionado)
 requirements.txt
-.gitignore                   inclui .vscode/ (configurações locais do editor)
+.gitignore                   inclui .vscode/ (configurações locais do editor) e o bloco do Impeccable (temporários em .impeccable/)
+PRODUCT.md                   contexto do produto para a skill Impeccable (plataforma android)
 CLAUDE.md
 ```
 
 - `EXPO_PUBLIC_API_URL` fica embutida no app: nunca colocar segredos em variáveis `EXPO_PUBLIC_*`.
 - Versões no `mobile/package.json`: expo ~58.0.22, react 19.3.0, react-dom 19.3.0, react-native 0.88.1, expo-router ~58.0.29, expo-secure-store ~58.0.2, expo-location ~58.0.21. Node v22.20.0, npm 10.9.3.
 - `mobile/app.json` não tem o plugin do `expo-location`: ele só vale para um app instalado (o Expo Go usa as próprias permissões). PROPOSTA para quando houver build: `["expo-location", { "locationWhenInUsePermission": "O DF Resolve usa a sua localização só quando você toca em Usar minha localização.", "isAndroidBackgroundLocationEnabled": false, "isIosBackgroundLocationEnabled": false }]` (testado só em memória, sem o app.json do projeto).
-- Android de borda a borda (obrigatório no SDK 58): a `Tela` soma `insets.bottom` ao padding de baixo (L1) e usa `keyboardVerticalOffset = useHeaderHeight()` de `expo-router/react-navigation` (L2). A lista soma `insets.bottom` no `FlatList`.
-- Export de referência (`expo export`, Android): 1165 módulos (7C). Antes: 1156 (Fase 6 e 7B sem L2), 1157 (L2, NÃO MEDIDO: o módulo a mais deduzido é o index.js de `expo-router/react-navigation`).
+- Android de borda a borda (obrigatório no SDK 58): a `Tela` soma `insets.bottom` ao padding de baixo (L1) e usa `keyboardVerticalOffset = useHeaderHeight()` de `expo-router/react-navigation` (L2). Na lista, o `insets.bottom` fica no rodapé fixo do botão Nova denúncia (Fase 8).
+- Export de referência (`expo export`, Android): 1165 módulos (7C, e igual em todos os passos da Fase 8). Antes: 1156 (Fase 6 e 7B sem L2), 1157 (L2, NÃO MEDIDO: o módulo a mais deduzido é o index.js de `expo-router/react-navigation`).
 
 ## Dependências instaladas no venv (verificado)
 
@@ -239,6 +241,23 @@ Todas as respostas de erro usam JSON no formato `{"message": "..."}`.
     - denúncias 22 a 27 (`fase7_teste`; a 25 "Em análise"), 28 (`fase5_teste`, pelo site; reaproveitou o id), 29 (`fase5_teste`), 30 a 35 e 37 (`fase7c_teste`; a 30 reaproveitou o id da excluída no G9; a 31 "Em análise"), 36 (`fase7c_outro`), 38 (`fase5_teste`, pelo site no H13; reaproveitou o id da excluída no H11) e 39 a 41 (`fase5_teste`, a 39 com a localização real de teste do usuário, que não deve ser repetida em documentos);
     - a 21 (`fase5_teste`) ganhou a categoria `calcada`, o título "Teste C11 I9" e localização;
     - tokens 23 a 32, todos revogados. Ao fim da fase, 0 tokens ativos em todas as contas e 0 tokens nos logs.
+- Fase 8 (visual), na branch `fase8-visual` (sem push nem merge): implementada e testada em 2026-11-16, com a skill Impeccable (auditoria nativa feita lendo as instruções da skill, sem `impeccable context` e sem baixar binário).
+  - IMPLEMENTADO:
+    - `81546d1`: PRODUCT.md (Positioning em aberto; contexto de uso marcado como hipótese de projeto) e bloco do Impeccable no `.gitignore`. O `.impeccable/config.json` não foi gravado.
+    - `417b88b`: paleta verde por papéis em `ui.js` (`cores`) e escala de tipo (`tipo`: 12, 14, 16, 20 e 24), com contraste conferido por script (primária 6,5:1; borda 4,8:1).
+    - `aa8a621`: alvos de 48 dp no Link, nos chips (raio 24) e no Sair, por `minHeight` e sem `hitSlop`; rótulo visível ligado ao campo (`accessibilityLabelledBy` com `useId`, só no Android); tamanho 15 trocado por 16.
+    - `3388861`: selo de status (Pendente e Em análise, com texto sempre visível) na lista e no detalhe; cartão com selo e categoria no topo e endereço à esquerda; Nova denúncia num rodapé fixo.
+    - `22665d7`: rótulo "Status" do detalhe em 16; tamanhos restantes pela escala; indicadores de carregamento na cor primária; retorno de toque no Link e no Sair; papel `sucessoFundo`.
+  - Auditoria nativa (leitura do código, sem aparelho): 10/20 antes da fase e 13/20 depois do `22665d7`.
+  - Decisões do usuário: direção B (verde floresta, primária `#1B6B3A`); borda escura do cartão aceita; "Status" em 16 só no detalhe; Positioning do PRODUCT.md em aberto; Nova denúncia em rodapé fixo.
+  - Testes no celular com a conta `fase7c_teste`, sem gravar denúncias: V1 a V9, W1 a W8, W10, X1 a X14 e Y1 a Y12 aprovados. Em todos os passos, P2 (export com 1165 módulos) e P3 (nenhum `console`) aprovados, e foto do banco antes e depois: `denuncia` e `user` sem mudança.
+  - W7 do passo 2: na primeira rodada, com dois testes combinados, o W7 foi dado como aprovado, mas não aparecia no log (a tela de detalhe sempre faz o GET ao abrir). Repetido sozinho e confirmado pelo log (GET da 35). Daí a prática de teste registrada em "Ambiente".
+  - NÃO VERIFICADO:
+    - W9: o rótulo acessível (`accessibilityLabelledBy`) com o TalkBack.
+    - V10: uso ao ar livre, sob sol (hipótese do PRODUCT.md).
+    - A engrenagem do Expo Go como causa da sobreposição vista sobre o botão Nova denúncia (provável, não confirmada).
+    - Tamanhos dos alvos e alturas: calculados pelo código, não medidos no aparelho.
+  - Dados de teste: tokens 33 a 39, todos da `fase7c_teste` e revogados. Nenhuma denúncia ou conta criada, alterada ou excluída. Ao fim, 0 tokens ativos e 0 tokens nos logs `df-fase8-*`.
 
 ## Problemas conhecidos
 
@@ -268,21 +287,31 @@ Todas as respostas de erro usam JSON no formato `{"message": "..."}`.
 - Aviso do Git `unable to find all commit-graph files`: é só cache; pode ser recriado com `git commit-graph write --reachable` mediante autorização.
 - App mobile, revisar na próxima atualização do SDK do Expo:
   - `npm audit` aponta 8 vulnerabilidades moderadas indiretas em ferramentas de desenvolvimento (eram 11; a causa da mudança não foi investigada). Não vão para o app. Não usar `npm audit fix`, que mudaria versões fixadas pelo SDK.
-- Revisar na Fase 8:
+- Mensagens (pendentes; não entraram no visual da Fase 8):
   - As mensagens de erro do app usam termos técnicos ("Flask", "modo rede").
   - No `PATCH`, um título numérico (`123`) ou `null` recebe "O campo título não pode ficar vazio.", que não descreve bem o caso.
   - Na tela de detalhe, a mensagem de erro de validação continua visível depois que o campo é corrigido.
+- Visual, depois da Fase 8 (PROPOSTA):
+  - `android_ripple` nos elementos tocáveis (testar antes os cantos arredondados).
+  - Texto de ajuda na lista vazia (o teste exige uma conta nova, sem denúncias).
+  - Indicador verde no puxar para atualizar (`RefreshControl` próprio).
+  - Tema escuro (o `app.json` fixa `light`; o `android.md` do Impeccable pede tema escuro de primeira classe).
+  - Rótulo acessível no iOS: o `accessibilityLabelledBy` só vale no Android (o PRODUCT.md é Android).
+  - Splash `#E6F4FE` do `app.json`, fora da paleta (não alterado).
+  - `accessibilityState` de desativado no `Link`.
+  - No detalhe, o Excluir tem o mesmo peso visual do Salvar.
 - Migração 0002 (pendência): um banco criado do zero pelo `create_all` fica com `user_version` 0, e a 0001 para sem alterar nada nele. A próxima migração precisa tratar esse caso (ou a 0001 passar a só marcar a versão quando as três colunas já existirem).
 - No site antigo, depois de criar uma denúncia, o log mostra dois `GET /denuncias/` seguidos (K11 e H13), e o `denuncia.js` faz só uma recarga. NÃO VERIFICADO, sem indicação de erro.
 - Scripts auxiliares das subpastas `fase5` e `fase6` da pasta temporária da sessão sumiram (alteração em 2026-11-14 às 16:26:42). NÃO EXPLICADO.
 
-## Próxima etapa: fechamento da Fase 7 e Fase 8 (PROPOSTA)
+## Próxima etapa: fechamento da Fase 8 (PROPOSTA)
 
-Apresentação do projeto: 2026-11-28 (o professor adiou a data em uma semana; era 2026-11-21).
+Apresentação do projeto: 2026-11-28, às 09:00 (confirmada pelo usuário em 2026-11-16; o professor adiou a data em uma semana; era 2026-11-21).
 
-- Fase 8: estados de carregamento, vazio e erro, revisão das mensagens e acabamento.
+- Decidir o push da `fase8-visual` e o merge no `main`.
+- Mensagens de erro (itens em "Problemas conhecidos").
 - Guia em PDF.
-- Limpeza do scratchpad e dos logs de teste, com autorização.
+- Limpeza do scratchpad e dos logs de teste (inclusive `df-fase8-*`), com autorização.
 
 ## Roadmap (PROPOSTA)
 
@@ -293,7 +322,7 @@ Decidido: app em `mobile/` neste repositório, navegação com Expo Router, Java
 - Fase 5: telas de cadastro, login e logout. Concluída.
 - Fase 6: criar, listar, ver, editar e excluir denúncias (o `GET /denuncias/<id>` com checagem de dono entrou aqui). Concluída.
 - Fase 7: novos campos. Categoria (7A e 7B) no `main`; GPS (7C) na branch `fase7c-gps`, mergeada no `main`. Concluída.
-- Fase 8: estados de carregamento, vazio e erro, revisão das mensagens e acabamento.
+- Fase 8: visual (paleta, escala de tipo, alvos de 48 dp, selo de status, rodapé fixo) na branch `fase8-visual`. As mensagens de erro ficaram pendentes.
 - Foto nas denúncias: adiada (decisões D8 a D12 em aberto: quantidade, tipos, Pillow, limite de envios, `.gitignore`).
 
 ## Decisões pendentes do usuário
@@ -304,3 +333,4 @@ Decidido: app em `mobile/` neste repositório, navegação com Expo Router, Java
 4. Ferramenta de migração: decidido script manual versionado (D2, Fase 7). Rever se o projeto crescer.
 5. Quando atualizar dependências (não antes da apresentação de 2026-11-28). O `expo install --check` de 2026-11-16 aponta: `expo` 58.0.25, `expo-constants` 58.0.16, `expo-linking` 58.0.17, `expo-location` 58.0.22, `expo-router` 58.0.31, `expo-secure-store` 58.0.3, `expo-status-bar` 58.0.5 e `react-native-safe-area-context` 5.11.1. O aviso do Metro passou a dizer "58.0.22 → ~58.0.25" e "7 other packages".
 6. Decidido: merge da `fase7c-gps` no `main` feito em 2026-11-16.
+7. Push da `fase8-visual` e merge no `main`: pendentes.
