@@ -34,6 +34,7 @@ export const cores = {
   erroTexto: '#8c1d18', // 8,0:1 sobre erroFundo
   avisoFundo: '#fff4e5',
   avisoTexto: '#7a4b00', // 6,8:1 sobre avisoFundo
+  sucessoFundo: '#E6F4EA', // caixa "Conectado" do diagnóstico: texto sobre ela 12,9:1
   // Status da denúncia (para o selo do passo 3; ainda sem uso)
   statusPendenteFundo: '#FFE9B0',
   statusPendenteTexto: '#7A4B00', // 6,2:1
@@ -157,7 +158,12 @@ export function Botao({ titulo, onPress, carregando = false, desabilitado = fals
 // o hitSlop não muda a área que o TalkBack mostra.
 export function Link({ titulo, onPress, desabilitado = false }) {
   return (
-    <Pressable onPress={onPress} disabled={desabilitado} accessibilityRole="link" style={styles.alvoLink}>
+    <Pressable
+      onPress={onPress}
+      disabled={desabilitado}
+      accessibilityRole="link"
+      style={({ pressed }) => [styles.alvoLink, pressed && !desabilitado && styles.botaoPressionado]}
+    >
       <Text style={[styles.link, desabilitado && styles.linkInativo]}>{titulo}</Text>
     </Pressable>
   );

@@ -97,7 +97,7 @@ export default function MinhasDenuncias() {
   if (estado === 'carregando') {
     return (
       <View style={styles.centro}>
-        <ActivityIndicator size="large" />
+        <ActivityIndicator size="large" color={cores.primaria} />
         <Text style={styles.suave}>Carregando denúncias...</Text>
       </View>
     );

@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { StyleSheet, Text } from 'react-native';
 import { useRouter } from 'expo-router';
 
-import { Botao, Campo, cores, Link, Mensagem, Tela } from '../components/ui';
+import { Botao, Campo, cores, Link, Mensagem, Tela, tipo } from '../components/ui';
 import { useSessao } from '../contexts/sessao';
 import { ErroApi, textoDoErro } from '../services/api';
 import { validarLogin } from '../utils/validacao';
@@ -75,5 +75,5 @@ export default function Login() {
 }
 
 const styles = StyleSheet.create({
-  titulo: { fontSize: 24, fontWeight: '600', textAlign: 'center', color: cores.texto, marginBottom: 8 },
+  titulo: { fontSize: tipo.tituloTela, fontWeight: '600', textAlign: 'center', color: cores.texto, marginBottom: 8 },
 });

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
-import { Botao, cores, Mensagem } from '../components/ui';
+import { Botao, cores, Mensagem, tipo } from '../components/ui';
 import { api, textoDoErro, urlDaApi } from '../services/api';
 
 // Teste de conexão com o Flask (GET /auth/check), sem login. Útil quando o IP do PC muda.
@@ -32,7 +32,7 @@ export default function Diagnostico() {
 
       {estado === 'carregando' && (
         <View style={styles.caixa}>
-          <ActivityIndicator size="large" />
+          <ActivityIndicator size="large" color={cores.primaria} />
           <Text style={styles.texto}>Conectando...</Text>
         </View>
       )}
@@ -53,9 +53,9 @@ export default function Diagnostico() {
 
 const styles = StyleSheet.create({
   tela: { flex: 1, padding: 24, gap: 16, backgroundColor: cores.fundo, justifyContent: 'center' },
-  url: { fontSize: 14, color: cores.textoSecundario, textAlign: 'center' },
-  caixa: { padding: 16, borderRadius: 8, gap: 8, alignItems: 'center', backgroundColor: '#f2f2f2' },
-  sucesso: { backgroundColor: '#e6f4ea' },
-  rotulo: { fontSize: 16, fontWeight: '600' },
-  texto: { fontSize: 15, textAlign: 'center' },
+  url: { fontSize: tipo.secundario, color: cores.textoSecundario, textAlign: 'center' },
+  caixa: { padding: 16, borderRadius: 8, gap: 8, alignItems: 'center', backgroundColor: cores.superficiePressionada },
+  sucesso: { backgroundColor: cores.sucessoFundo },
+  rotulo: { fontSize: tipo.corpo, fontWeight: '600', color: cores.texto },
+  texto: { fontSize: tipo.corpo, textAlign: 'center', color: cores.texto },
 });

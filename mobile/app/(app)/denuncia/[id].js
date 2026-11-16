@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
-import { Botao, Campo, cores, Link, Mensagem, SeletorCategoria, SeloStatus, Tela } from '../../../components/ui';
+import { Botao, Campo, cores, Link, Mensagem, SeletorCategoria, SeloStatus, Tela, tipo } from '../../../components/ui';
 import { useSessao } from '../../../contexts/sessao';
 import { api, ErroApi, textoDoErro } from '../../../services/api';
 import { obterLocalizacao } from '../../../utils/localizacao';
@@ -45,7 +45,7 @@ function Leitura({ rotulo, valor }) {
 function Status({ valor }) {
   return (
     <View style={styles.leitura}>
-      <Text style={styles.rotulo}>Status</Text>
+      <Text style={styles.rotuloStatus}>Status</Text>
       <View style={styles.linha}>
         <SeloStatus status={valor} />
       </View>
@@ -230,7 +230,7 @@ export default function DetalheDenuncia() {
   if (estado === 'carregando') {
     return (
       <View style={styles.centro}>
-        <ActivityIndicator size="large" />
+        <ActivityIndicator size="large" color={cores.primaria} />
         <Text style={styles.suave}>Carregando denúncia...</Text>
       </View>
     );
@@ -354,6 +354,9 @@ const styles = StyleSheet.create({
   descricao: { minHeight: 120 },
   leitura: { gap: 4 },
   localizacao: { gap: 6 },
-  rotulo: { fontSize: 14, fontWeight: '600', color: cores.texto },
-  valor: { fontSize: 16, color: cores.texto },
+  rotulo: { fontSize: tipo.rotulo, fontWeight: '600', color: cores.texto },
+  // Só o rótulo "Status" é maior (pedido do usuário). Para voltar ao tamanho dos outros, usar
+  // styles.rotulo no componente Status; para estender, apontar outros rótulos para este estilo.
+  rotuloStatus: { fontSize: tipo.corpo, fontWeight: '600', color: cores.texto },
+  valor: { fontSize: tipo.corpo, color: cores.texto },
 });

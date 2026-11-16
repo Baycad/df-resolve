@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { StyleSheet, Text } from 'react-native';
 import { useRouter } from 'expo-router';
 
-import { Botao, Campo, cores, Mensagem, Tela } from '../components/ui';
+import { Botao, Campo, cores, Mensagem, Tela, tipo } from '../components/ui';
 import { useSessao } from '../contexts/sessao';
 import { api, textoDoErro } from '../services/api';
 import { SENHA_MIN, USUARIO_MAX, USUARIO_MIN, validarCadastro } from '../utils/validacao';
@@ -99,5 +99,5 @@ export default function Cadastro() {
 }
 
 const styles = StyleSheet.create({
-  dica: { color: cores.textoSecundario, fontSize: 14 },
+  dica: { color: cores.textoSecundario, fontSize: tipo.secundario },
 });

@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
-import { Botao, Campo, cores, Link, Mensagem, SeletorCategoria, Tela } from '../../components/ui';
+import { Botao, Campo, cores, Link, Mensagem, SeletorCategoria, Tela, tipo } from '../../components/ui';
 import { useSessao } from '../../contexts/sessao';
 import { api, ErroApi, textoDoErro } from '../../services/api';
 import { obterLocalizacao } from '../../utils/localizacao';
@@ -157,6 +157,6 @@ export default function NovaDenuncia() {
 const styles = StyleSheet.create({
   descricao: { minHeight: 120 },
   localizacao: { gap: 6 },
-  rotulo: { fontSize: 14, fontWeight: '600', color: cores.texto },
-  valor: { fontSize: 16, color: cores.texto },
+  rotulo: { fontSize: tipo.rotulo, fontWeight: '600', color: cores.texto },
+  valor: { fontSize: tipo.corpo, color: cores.texto },
 });
