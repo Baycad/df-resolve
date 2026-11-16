@@ -3,7 +3,7 @@ import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from '
 import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Botao, cores, Mensagem } from '../../components/ui';
+import { Botao, cores, Mensagem, SeloStatus, tipo } from '../../components/ui';
 import { useSessao } from '../../contexts/sessao';
 import { api, ErroApi, textoDoErro } from '../../services/api';
 import { rotuloCategoria } from '../../utils/validacao';
@@ -17,8 +17,7 @@ const LIBERA_SEM_NAVEGACAO_MS = 1000;
 export default function MinhasDenuncias() {
   const router = useRouter();
   const navigation = useNavigation();
-  // Espaço da barra de navegação do Android no fim da lista, como na Tela (L1).
-  // No FlatList, o padding de baixo vira 16 (o mesmo de styles.lista) + insets.bottom.
+  // Espaço da barra de navegação do Android (L1): vai no rodapé fixo, que é o último elemento da tela.
   const insets = useSafeAreaInsets();
   const { token, usuario, sessaoExpirada } = useSessao();
   const [estado, setEstado] = useState('carregando'); // carregando | pronto | erro
@@ -113,54 +112,71 @@ export default function MinhasDenuncias() {
     );
   }
 
+  // O botão Nova denúncia fica num rodapé fixo, fora da lista: não rola com ela e fica embaixo,
+  // ao alcance do polegar (princípio 1 do PRODUCT.md). O rodapé soma insets.bottom (L1).
   return (
-    <FlatList
-      style={styles.fundo}
-      contentContainerStyle={[styles.lista, { paddingBottom: 16 + insets.bottom }]}
-      data={denuncias}
-      keyExtractor={(d) => String(d.id)}
-      refreshing={atualizando}
-      onRefresh={() => carregar(true)}
-      ListHeaderComponent={
-        <View style={styles.cabecalho}>
-          <Botao titulo="Nova denúncia" onPress={() => abrir('/nova')} />
-          {usuario ? <Text style={styles.suave}>Conectado como {usuario}</Text> : null}
-        </View>
-      }
-      ListEmptyComponent={<Text style={styles.vazio}>Você ainda não tem denúncias registradas.</Text>}
-      renderItem={({ item }) => {
-        // Denúncia antiga, sem categoria: o cartão não mostra nada nesse lugar (F3).
-        const categoria = rotuloCategoria(item.categoria);
-        return (
-          <Pressable
-            onPress={() => abrir({ pathname: '/denuncia/[id]', params: { id: String(item.id) } })}
-            accessibilityRole="button"
-            accessibilityHint="Abre a denúncia para ver, editar ou excluir"
-            style={({ pressed }) => [styles.cartao, pressed && styles.cartaoPressionado]}
-          >
-            {categoria ? <Text style={styles.categoria}>{categoria}</Text> : null}
-            <Text style={styles.titulo}>{item.titulo}</Text>
-            <Text style={styles.suave}>{item.endereco}</Text>
-            <Text numberOfLines={3}>{item.descricao}</Text>
-            <Text style={styles.status}>{item.status}</Text>
-          </Pressable>
-        );
-      }}
-    />
+    <View style={styles.tela}>
+      <FlatList
+        style={styles.flex}
+        contentContainerStyle={styles.lista}
+        data={denuncias}
+        keyExtractor={(d) => String(d.id)}
+        refreshing={atualizando}
+        onRefresh={() => carregar(true)}
+        ListHeaderComponent={usuario ? <Text style={styles.suave}>Conectado como {usuario}</Text> : null}
+        ListEmptyComponent={<Text style={styles.vazio}>Você ainda não tem denúncias registradas.</Text>}
+        renderItem={({ item }) => {
+          // Denúncia antiga, sem categoria: a primeira linha do cartão mostra só o selo (F3).
+          const categoria = rotuloCategoria(item.categoria);
+          return (
+            <Pressable
+              onPress={() => abrir({ pathname: '/denuncia/[id]', params: { id: String(item.id) } })}
+              accessibilityRole="button"
+              accessibilityHint="Abre a denúncia para ver, editar ou excluir"
+              style={({ pressed }) => [styles.cartao, pressed && styles.cartaoPressionado]}
+            >
+              <View style={styles.topoCartao}>
+                <SeloStatus status={item.status} />
+                {categoria ? <Text style={styles.categoria}>{categoria}</Text> : null}
+              </View>
+              <Text style={styles.titulo}>{item.titulo}</Text>
+              <Text style={styles.endereco}>{item.endereco}</Text>
+              <Text style={styles.descricao} numberOfLines={3}>
+                {item.descricao}
+              </Text>
+            </Pressable>
+          );
+        }}
+      />
+      <View style={[styles.rodape, { paddingBottom: 12 + insets.bottom }]}>
+        <Botao titulo="Nova denúncia" onPress={() => abrir('/nova')} />
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  fundo: { backgroundColor: cores.fundo },
+  tela: { flex: 1, backgroundColor: cores.fundo },
+  flex: { flex: 1 },
   centro: { flex: 1, justifyContent: 'center', alignItems: 'stretch', gap: 12, backgroundColor: cores.fundo },
   padding: { padding: 24 },
   lista: { padding: 16, gap: 12, flexGrow: 1 },
-  cabecalho: { gap: 8 },
   cartao: { borderWidth: 1, borderColor: cores.borda, borderRadius: 8, padding: 12, gap: 4 },
   cartaoPressionado: { backgroundColor: cores.superficiePressionada },
-  categoria: { alignSelf: 'flex-start', fontSize: 13, fontWeight: '600', color: cores.primaria },
-  titulo: { fontSize: 16, fontWeight: '600', color: cores.texto },
+  // Primeira linha do cartão: selo de status e, ao lado, a categoria (quebra de linha se faltar espaço).
+  topoCartao: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginBottom: 4 },
+  categoria: { flexShrink: 1, fontSize: tipo.secundario, fontWeight: '600', color: cores.primaria },
+  titulo: { fontSize: tipo.corpo, fontWeight: '600', color: cores.texto },
+  endereco: { fontSize: tipo.secundario, color: cores.textoSecundario },
+  descricao: { fontSize: tipo.secundario, color: cores.texto },
+  // "Conectado como" e o texto de carregamento continuam centralizados.
   suave: { color: cores.textoSecundario, textAlign: 'center' },
-  status: { alignSelf: 'flex-start', marginTop: 4, fontSize: 13, color: cores.textoSecundario },
-  vazio: { marginTop: 48, textAlign: 'center', color: cores.textoSecundario, fontSize: 16 },
+  vazio: { marginTop: 48, textAlign: 'center', color: cores.textoSecundario, fontSize: tipo.corpo },
+  rodape: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: cores.bordaSuave,
+    backgroundColor: cores.fundo,
+  },
 });

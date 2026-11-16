@@ -173,6 +173,23 @@ export function Mensagem({ tipo = 'erro', children }) {
   );
 }
 
+// Selo do status da denúncia. O texto do status aparece sempre; a cor só reforça (nunca só cor).
+// Um status sem par de cores definido (por exemplo, um status novo no servidor) usa o par neutro.
+const CORES_STATUS = {
+  Pendente: { fundo: cores.statusPendenteFundo, texto: cores.statusPendenteTexto },
+  'Em análise': { fundo: cores.statusAnaliseFundo, texto: cores.statusAnaliseTexto },
+};
+const STATUS_NEUTRO = { fundo: cores.superficiePressionada, texto: cores.texto };
+
+export function SeloStatus({ status }) {
+  const par = CORES_STATUS[status] ?? STATUS_NEUTRO;
+  return (
+    <View style={[styles.selo, { backgroundColor: par.fundo }]}>
+      <Text style={[styles.textoSelo, { color: par.texto }]}>{status}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: cores.fundo },
   tela: { flexGrow: 1, justifyContent: 'center', padding: 24, gap: 16 },
@@ -216,4 +233,6 @@ const styles = StyleSheet.create({
   erroTexto: { color: cores.erroTexto, fontSize: tipo.corpo },
   avisoFundo: { backgroundColor: cores.avisoFundo },
   avisoTexto: { color: cores.avisoTexto, fontSize: tipo.corpo },
+  selo: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  textoSelo: { fontSize: tipo.secundario, fontWeight: '600' },
 });

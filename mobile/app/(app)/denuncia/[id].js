@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
-import { Botao, Campo, cores, Link, Mensagem, SeletorCategoria, Tela } from '../../../components/ui';
+import { Botao, Campo, cores, Link, Mensagem, SeletorCategoria, SeloStatus, Tela } from '../../../components/ui';
 import { useSessao } from '../../../contexts/sessao';
 import { api, ErroApi, textoDoErro } from '../../../services/api';
 import { obterLocalizacao } from '../../../utils/localizacao';
@@ -37,6 +37,18 @@ function Leitura({ rotulo, valor }) {
     <View style={styles.leitura}>
       <Text style={styles.rotulo}>{rotulo}</Text>
       <Text style={styles.valor}>{valor}</Text>
+    </View>
+  );
+}
+
+// Status em selo (texto e cor), com o mesmo rótulo dos outros campos. Fica sempre no topo da tela.
+function Status({ valor }) {
+  return (
+    <View style={styles.leitura}>
+      <Text style={styles.rotulo}>Status</Text>
+      <View style={styles.linha}>
+        <SeloStatus status={valor} />
+      </View>
     </View>
   );
 }
@@ -249,19 +261,19 @@ export default function DetalheDenuncia() {
         <Mensagem tipo="aviso">
           {`Esta denúncia está com status ${original.status}. Só é possível alterar denúncias com status ${STATUS_EDITAVEL}.`}
         </Mensagem>
+        <Status valor={original.status} />
         <Leitura rotulo="Categoria" valor={rotuloCategoria(original.categoria) ?? SEM_CATEGORIA} />
         <Leitura rotulo="Título" valor={original.titulo} />
         <Leitura rotulo="Endereço" valor={original.endereco} />
         <Leitura rotulo="Descrição" valor={original.descricao} />
         <Leitura rotulo="Localização" valor={textoLocalizacao(original.latitude, original.longitude) ?? SEM_LOCALIZACAO} />
-        <Leitura rotulo="Status" valor={original.status} />
       </Tela>
     );
   }
 
   return (
     <Tela>
-      <Text style={styles.status}>Status: {original.status}</Text>
+      <Status valor={original.status} />
       <SeletorCategoria
         rotulo="Categoria"
         opcoes={CATEGORIAS}
@@ -338,7 +350,7 @@ const styles = StyleSheet.create({
   centro: { flex: 1, justifyContent: 'center', alignItems: 'stretch', gap: 12, backgroundColor: cores.fundo },
   padding: { padding: 24 },
   suave: { color: cores.textoSecundario, textAlign: 'center' },
-  status: { fontSize: 14, color: cores.textoSecundario },
+  linha: { flexDirection: 'row' },
   descricao: { minHeight: 120 },
   leitura: { gap: 4 },
   localizacao: { gap: 6 },
