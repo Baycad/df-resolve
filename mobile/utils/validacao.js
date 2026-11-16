@@ -80,3 +80,34 @@ export function validarDenuncia(valores, { edicao = false } = {}) {
   }
   return null;
 }
+
+// Localização (7C). Limites e casas copiados de LIMITES_LOCALIZACAO e CASAS_LOCALIZACAO em
+// df_resolve/routes/denuncia_routes.py. O servidor continua sendo a autoridade e arredonda de novo.
+export const LIMITES_LOCALIZACAO = { latitude: 90, longitude: 180 };
+export const CASAS_LOCALIZACAO = 5;
+export const MENSAGEM_LOCALIZACAO = 'Localização inválida.';
+
+// 5 casas, como o servidor. toFixed devolve texto; Number() volta a número.
+// Num valor que termina exatamente em 5 na sexta casa, o JavaScript e o Python podem arredondar
+// diferente; o valor gravado é sempre o do servidor.
+export function arredondarCoordenada(valor) {
+  return Number(valor.toFixed(CASAS_LOCALIZACAO));
+}
+
+// localizacao: null (sem localização) ou { latitude, longitude } em números.
+export function validarLocalizacao(localizacao) {
+  if (localizacao == null) return null;
+  for (const [campo, limite] of Object.entries(LIMITES_LOCALIZACAO)) {
+    const valor = localizacao[campo];
+    if (typeof valor !== 'number' || !Number.isFinite(valor) || Math.abs(valor) > limite) {
+      return MENSAGEM_LOCALIZACAO;
+    }
+  }
+  return null;
+}
+
+// Texto para a tela: "-15.79394, -47.88284", ou null quando não há localização.
+export function textoLocalizacao(latitude, longitude) {
+  if (latitude == null || longitude == null) return null;
+  return `${latitude.toFixed(CASAS_LOCALIZACAO)}, ${longitude.toFixed(CASAS_LOCALIZACAO)}`;
+}

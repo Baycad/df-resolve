@@ -2,16 +2,31 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
-import { Botao, Campo, cores, Mensagem, SeletorCategoria, Tela } from '../../../components/ui';
+import { Botao, Campo, cores, Link, Mensagem, SeletorCategoria, Tela } from '../../../components/ui';
 import { useSessao } from '../../../contexts/sessao';
 import { api, ErroApi, textoDoErro } from '../../../services/api';
-import { CAMPOS_DENUNCIA, CATEGORIAS, rotuloCategoria, tamanho, validarDenuncia } from '../../../utils/validacao';
+import { obterLocalizacao } from '../../../utils/localizacao';
+import {
+  CAMPOS_DENUNCIA,
+  CATEGORIAS,
+  rotuloCategoria,
+  tamanho,
+  textoLocalizacao,
+  validarDenuncia,
+  validarLocalizacao,
+} from '../../../utils/validacao';
 
 // Igual a STATUS_EDITAVEL em df_resolve/routes/denuncia_routes.py.
 const STATUS_EDITAVEL = 'Pendente';
 const NAO_ENCONTRADA = 'Denúncia não encontrada. Ela pode ter sido excluída.';
 const STATUS_MUDOU = 'O status desta denúncia mudou e as alterações não foram salvas.';
 const SEM_CATEGORIA = 'Sem categoria';
+const SEM_LOCALIZACAO = 'Sem localização';
+
+// null quando a denúncia não tem o par completo; senão { latitude, longitude }.
+function localizacaoDe(d) {
+  return d && d.latitude != null && d.longitude != null ? { latitude: d.latitude, longitude: d.longitude } : null;
+}
 
 function contador(valor, campo) {
   return `${tamanho(valor.trim())}/${CAMPOS_DENUNCIA[campo].limite}`;
@@ -39,11 +54,15 @@ export default function DetalheDenuncia() {
   const [titulo, setTitulo] = useState('');
   const [endereco, setEndereco] = useState('');
   const [descricao, setDescricao] = useState('');
+  const [localizacao, setLocalizacao] = useState(null); // null ou { latitude, longitude }
+  const [obtendoLocal, setObtendoLocal] = useState(false);
+  const [avisoLocal, setAvisoLocal] = useState('');
   const [ocupado, setOcupado] = useState(null); // null | 'salvando' | 'excluindo'
   const [erro, setErro] = useState('');
   const [aviso, setAviso] = useState('');
   // Trava síncrona contra toques repetidos, comum ao Salvar e ao Excluir.
   const travado = useRef(false);
+  const obtendo = useRef(false); // a mesma ideia, para o "Usar minha localização"
   const campoEndereco = useRef(null);
   const campoDescricao = useRef(null);
 
@@ -58,6 +77,8 @@ export default function DetalheDenuncia() {
       setTitulo(d.titulo ?? '');
       setEndereco(d.endereco ?? '');
       setDescricao(d.descricao ?? '');
+      setLocalizacao(localizacaoDe(d));
+      setAvisoLocal('');
       setEstado('pronto');
     } catch (e) {
       if (e instanceof ErroApi && e.status === 401) {
@@ -86,6 +107,7 @@ export default function DetalheDenuncia() {
   // O original também é comparado sem espaços, para um dado antigo com espaços não contar como alteração.
   // A categoria é comparada sem trim. Sem escolha numa denúncia antiga (null), ela nem vai no PATCH (D3);
   // e não existe como voltar a "sem categoria" (E-a).
+  // A localização vai sempre em par, e só se mudou: um par novo, ou os dois null para remover (C1).
   const valores = { titulo, endereco, descricao };
   const alterados = {};
   if (original) {
@@ -94,9 +116,32 @@ export default function DetalheDenuncia() {
       const valor = valores[campo].trim();
       if (valor !== (original[campo] ?? '').trim()) alterados[campo] = valor;
     }
+    const antes = localizacaoDe(original);
+    if (localizacao?.latitude !== antes?.latitude || localizacao?.longitude !== antes?.longitude) {
+      alterados.latitude = localizacao ? localizacao.latitude : null;
+      alterados.longitude = localizacao ? localizacao.longitude : null;
+    }
   }
   const temAlteracao = Object.keys(alterados).length > 0;
   const editavel = original?.status === STATUS_EDITAVEL;
+
+  async function usarLocalizacao() {
+    if (obtendo.current) return;
+    obtendo.current = true;
+    setObtendoLocal(true);
+    setAvisoLocal('');
+    // obterLocalizacao nunca lança erro: devolve { localizacao } ou { aviso }.
+    const resultado = await obterLocalizacao();
+    if (resultado.aviso) setAvisoLocal(resultado.aviso);
+    else setLocalizacao(resultado.localizacao);
+    obtendo.current = false;
+    setObtendoLocal(false);
+  }
+
+  function removerLocalizacao() {
+    setLocalizacao(null);
+    setAvisoLocal('');
+  }
 
   // Falha no Salvar ou no Excluir.
   async function tratarFalha(e) {
@@ -126,7 +171,7 @@ export default function DetalheDenuncia() {
       return;
     }
     travado.current = true;
-    const problema = validarDenuncia(alterados, { edicao: true });
+    const problema = validarDenuncia(alterados, { edicao: true }) ?? validarLocalizacao(localizacao);
     if (problema) {
       setErro(problema);
       travado.current = false;
@@ -208,6 +253,7 @@ export default function DetalheDenuncia() {
         <Leitura rotulo="Título" valor={original.titulo} />
         <Leitura rotulo="Endereço" valor={original.endereco} />
         <Leitura rotulo="Descrição" valor={original.descricao} />
+        <Leitura rotulo="Localização" valor={textoLocalizacao(original.latitude, original.longitude) ?? SEM_LOCALIZACAO} />
         <Leitura rotulo="Status" valor={original.status} />
       </Tela>
     );
@@ -257,12 +303,25 @@ export default function DetalheDenuncia() {
         textAlignVertical="top"
         estilo={styles.descricao}
       />
+      <View style={styles.localizacao}>
+        <Text style={styles.rotulo}>Localização (opcional)</Text>
+        <Text style={styles.valor}>
+          {obtendoLocal
+            ? 'Obtendo localização...'
+            : textoLocalizacao(localizacao?.latitude, localizacao?.longitude) ?? SEM_LOCALIZACAO}
+        </Text>
+        <Link titulo="Usar minha localização" onPress={usarLocalizacao} desabilitado={ocupado !== null || obtendoLocal} />
+        {localizacao ? (
+          <Link titulo="Remover localização" onPress={removerLocalizacao} desabilitado={ocupado !== null || obtendoLocal} />
+        ) : null}
+        <Mensagem tipo="aviso">{avisoLocal}</Mensagem>
+      </View>
       <Mensagem>{erro}</Mensagem>
       <Botao
         titulo="Salvar alterações"
         onPress={salvar}
         carregando={ocupado === 'salvando'}
-        desabilitado={!temAlteracao || ocupado !== null}
+        desabilitado={!temAlteracao || ocupado !== null || obtendoLocal}
       />
       <Botao
         titulo="Excluir denúncia"
@@ -282,6 +341,7 @@ const styles = StyleSheet.create({
   status: { fontSize: 14, color: cores.suave },
   descricao: { minHeight: 120 },
   leitura: { gap: 4 },
+  localizacao: { gap: 6 },
   rotulo: { fontSize: 14, fontWeight: '600', color: cores.texto },
   valor: { fontSize: 16, color: cores.texto },
 });
