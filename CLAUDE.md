@@ -68,6 +68,7 @@ Repositório público: https://github.com/Baycad/df-resolve (branch `main`).
 
 - `DF_RESOLVE_SECRET_KEY`: chave da sessão. Sem ela, uma chave temporária é gerada a cada início.
 - `DF_RESOLVE_HOST` (padrão `127.0.0.1`), `DF_RESOLVE_PORT` (padrão `5000`), `DF_RESOLVE_DEBUG` (padrão ligado; desligado automaticamente se o host não for local).
+- `DF_RESOLVE_REAL_IP_HEADER` (padrão vazio): nome do cabeçalho com o IP real do cliente, usado como chave dos limites quando traz um IP válido; vazio ou inválido usa o `remote_addr`. Só ligar atrás de um proxy que sobrescreva o cabeçalho (no PythonAnywhere: `X-Real-IP`).
 
 ## Estrutura verificada
 
@@ -115,7 +116,7 @@ CLAUDE.md
 
 ## Dependências instaladas no venv (verificado)
 
-Flask 2.3.2, Flask-Cors 3.0.10, Flask-Login 0.6.2, Flask-SQLAlchemy 3.0.3, SQLAlchemy 2.0.41 (não fixado no requirements), Werkzeug 2.3.6.
+Flask 2.3.2, Flask-Cors 3.0.10, Flask-Login 0.6.2, Flask-SQLAlchemy 3.0.3, SQLAlchemy 2.0.41 (fixado no requirements desde a Fase 9, com click, MarkupSafe, typing_extensions, blinker, itsdangerous e Jinja2; o greenlet não é fixado), Werkzeug 2.3.6.
 Não atualizar isoladamente: Werkzeug 3 remove o hash `sha256` e exige Flask-Login 0.6.3 ou superior.
 Flask-Limiter 4.1.1, com dependências fixadas no requirements: limits 5.8.0, ordered-set 4.1.0, Deprecated 1.3.1, wrapt 1.17.3, packaging 26.3. As versões mais novas de Deprecated (3.0.1) e wrapt (2.5.2) tinham menos de uma semana em 2026-11-03.
 
@@ -160,7 +161,7 @@ Todas as respostas de erro usam JSON no formato `{"message": "..."}`.
 - Localização: opcional e sempre em par. Só um dos dois, ou um `null` com um número: 400 "Envie latitude e longitude juntas.". Texto, bool, NaN, Infinity, 1e400, inteiro enorme, lista, objeto ou fora de -90 a 90 / -180 a 180: 400 "Localização inválida.". Os limites valem. O servidor arredonda a 5 casas. Os dois `null` removem no PATCH e valem como "sem localização" no POST.
 - A localização é dado pessoal: só é enviada com um toque explícito em "Usar minha localização", e só o dono a vê.
 - CORS liberado só para `http://127.0.0.1:5500` (Live Server). O app nativo não depende de CORS.
-- Limites por IP (`request.remote_addr`; `X-Forwarded-For` é ignorado):
+- Limites por IP (`request.remote_addr`, ou o cabeçalho de `DF_RESOLVE_REAL_IP_HEADER` quando configurado; `X-Forwarded-For` é ignorado):
   - POST /auth/login e POST /auth/token, com contadores compartilhados (`shared_limit`, escopos `login_total` e `login_falhas`): 5 falhas (401) por minuto e 20 por hora; 30 requisições por minuto no total.
   - POST /auth/register: 3 por minuto e 10 por hora.
   - Estourou: 429 com `{"message": "Muitas tentativas. Aguarde um pouco e tente novamente."}` e `Retry-After`.
@@ -241,7 +242,7 @@ Todas as respostas de erro usam JSON no formato `{"message": "..."}`.
     - denúncias 22 a 27 (`fase7_teste`; a 25 "Em análise"), 28 (`fase5_teste`, pelo site; reaproveitou o id), 29 (`fase5_teste`), 30 a 35 e 37 (`fase7c_teste`; a 30 reaproveitou o id da excluída no G9; a 31 "Em análise"), 36 (`fase7c_outro`), 38 (`fase5_teste`, pelo site no H13; reaproveitou o id da excluída no H11) e 39 a 41 (`fase5_teste`, a 39 com a localização real de teste do usuário, que não deve ser repetida em documentos);
     - a 21 (`fase5_teste`) ganhou a categoria `calcada`, o título "Teste C11 I9" e localização;
     - tokens 23 a 32, todos revogados. Ao fim da fase, 0 tokens ativos em todas as contas e 0 tokens nos logs.
-- Fase 8 (visual), na branch `fase8-visual` (sem push nem merge): implementada e testada em 2026-11-16, com a skill Impeccable (auditoria nativa feita lendo as instruções da skill, sem `impeccable context` e sem baixar binário).
+- Fase 8 (visual), na branch `fase8-visual` (mergeada no `main` em 2026-11-16, commit `6e5e34f`, e enviada ao GitHub): implementada e testada em 2026-11-16, com a skill Impeccable (auditoria nativa feita lendo as instruções da skill, sem `impeccable context` e sem baixar binário).
   - IMPLEMENTADO:
     - `81546d1`: PRODUCT.md (Positioning em aberto; contexto de uso marcado como hipótese de projeto) e bloco do Impeccable no `.gitignore`. O `.impeccable/config.json` não foi gravado.
     - `417b88b`: paleta verde por papéis em `ui.js` (`cores`) e escala de tipo (`tipo`: 12, 14, 16, 20 e 24), com contraste conferido por script (primária 6,5:1; borda 4,8:1).
@@ -258,13 +259,22 @@ Todas as respostas de erro usam JSON no formato `{"message": "..."}`.
     - A engrenagem do Expo Go como causa da sobreposição vista sobre o botão Nova denúncia (provável, não confirmada).
     - Tamanhos dos alvos e alturas: calculados pelo código, não medidos no aparelho.
   - Dados de teste: tokens 33 a 39, todos da `fase7c_teste` e revogados. Nenhuma denúncia ou conta criada, alterada ou excluída. Ao fim, 0 tokens ativos e 0 tokens nos logs `df-fase8-*`.
+- Fase 9 (hospedagem e APK): de 2026-11-16 a 2026-11-17. Merge da `fase9-apk` no `main` (avanço simples, `6842f21`) e push em 2026-11-17.
+  - Backend no PythonAnywhere, usuário Baycad, `https://baycad.pythonanywhere.com` (HTTPS forçado), com banco novo (não é cópia do local). A chave da sessão fica em arquivo fora do Git no servidor. A variável `DF_RESOLVE_REAL_IP_HEADER=X-Real-IP` é definida na configuração do servidor, fora do Git.
+  - Commit `7bc8f68`: o limitador usa o IP real do cliente atrás do proxy. Sem isso, todos dividiam o IP do proxy (achado no S13). Testes locais L1 a L4 aprovados; no servidor, H0 e H1 aprovados (o proxy sobrescreve um `X-Real-IP` forjado).
+  - Testes no servidor S1 a S13 aprovados. Dados no servidor: uma conta de demonstração, com a senha só em arquivo local fora do Git, e uma denúncia.
+  - APK via EAS, commits `e749f6a`, `cf18bf7` e `6842f21`: pacote `com.dfresolve.app`, nome "DF Resolve", `projectId` vinculado (owner `baycad`), permissões não usadas bloqueadas (`blockedPermissions`), plugin do `expo-location` sem segundo plano, e perfil `preview` (APK, distribuição interna) com `EXPO_PUBLIC_API_URL=https://baycad.pythonanywhere.com` e `requireCommit`. O pacote do `eas build:inspect` foi auditado: só os arquivos versionados e um `.git` raso com 1 commit.
+  - Testes A1 a A10 aprovados.
+  - NÃO VERIFICADO: o comportamento do servidor gratuito no limite de CPU; as permissões do manifesto final (conferidas só no aparelho).
+  - Diferença conhecida: `greenlet` 3.2.3 no venv local e 3.5.6 no servidor (não fixado; o projeto não usa o modo assíncrono do SQLAlchemy).
 
 ## Problemas conhecidos
 
 ### Antes de produção
 - O limite é por IP. Usuários atrás do mesmo IP (NAT de operadora móvel, escola) dividem a cota e podem ser bloqueados juntos. Rever os valores antes do app entrar em produção.
 - Não há limite por conta: um ataque distribuído em vários IPs contra uma única conta não é contido.
-- Atrás de um proxy reverso, todos os usuários teriam o IP do proxy. Será preciso `ProxyFix` com o número exato de proxies confiáveis.
+- Atrás de um proxy reverso, todos os usuários teriam o IP do proxy. No PythonAnywhere isso foi resolvido com `DF_RESOLVE_REAL_IP_HEADER=X-Real-IP` (Fase 9); outro proxy exige conferir qual cabeçalho ele sobrescreve.
+- A web app gratuita do PythonAnywhere expira em 1 mês sem renovação ("Run until 1 month from today").
 - Com vários processos, cada um tem seus contadores, o que multiplica o limite. Seria preciso um armazenamento compartilhado (Redis).
 - Um app Android instalado bloqueia requisições `http://` por padrão, então a API vai precisar de HTTPS.
 - Tokens vencidos e revogados ficam acumulados em `auth_token` (não há limpeza).
@@ -304,14 +314,14 @@ Todas as respostas de erro usam JSON no formato `{"message": "..."}`.
 - No site antigo, depois de criar uma denúncia, o log mostra dois `GET /denuncias/` seguidos (K11 e H13), e o `denuncia.js` faz só uma recarga. NÃO VERIFICADO, sem indicação de erro.
 - Scripts auxiliares das subpastas `fase5` e `fase6` da pasta temporária da sessão sumiram (alteração em 2026-11-14 às 16:26:42). NÃO EXPLICADO.
 
-## Próxima etapa: fechamento da Fase 8 (PROPOSTA)
+## Próxima etapa: apresentação (PROPOSTA)
 
 Apresentação do projeto: 2026-11-28, às 09:00 (confirmada pelo usuário em 2026-11-16; o professor adiou a data em uma semana; era 2026-11-21).
 
-- Decidir o push da `fase8-visual` e o merge no `main`.
+- Renovar a web app no PythonAnywhere antes da apresentação e conferir o APK no aparelho.
 - Mensagens de erro (itens em "Problemas conhecidos").
 - Guia em PDF.
-- Limpeza do scratchpad e dos logs de teste (inclusive `df-fase8-*`), com autorização.
+- Limpeza do scratchpad, dos logs de teste (inclusive `df-fase8-*`) e da pasta `df-eas-inspect`, com autorização.
 
 ## Roadmap (PROPOSTA)
 
@@ -323,6 +333,7 @@ Decidido: app em `mobile/` neste repositório, navegação com Expo Router, Java
 - Fase 6: criar, listar, ver, editar e excluir denúncias (o `GET /denuncias/<id>` com checagem de dono entrou aqui). Concluída.
 - Fase 7: novos campos. Categoria (7A e 7B) no `main`; GPS (7C) na branch `fase7c-gps`, mergeada no `main`. Concluída.
 - Fase 8: visual (paleta, escala de tipo, alvos de 48 dp, selo de status, rodapé fixo) na branch `fase8-visual`. As mensagens de erro ficaram pendentes.
+- Fase 9: backend no PythonAnywhere e APK pelo EAS, implementada e testada; pendentes: guia em PDF, recriar o banco do servidor em 2026-11-27 e limpeza.
 - Foto nas denúncias: adiada (decisões D8 a D12 em aberto: quantidade, tipos, Pillow, limite de envios, `.gitignore`).
 
 ## Decisões pendentes do usuário
@@ -333,4 +344,4 @@ Decidido: app em `mobile/` neste repositório, navegação com Expo Router, Java
 4. Ferramenta de migração: decidido script manual versionado (D2, Fase 7). Rever se o projeto crescer.
 5. Quando atualizar dependências (não antes da apresentação de 2026-11-28). O `expo install --check` de 2026-11-16 aponta: `expo` 58.0.25, `expo-constants` 58.0.16, `expo-linking` 58.0.17, `expo-location` 58.0.22, `expo-router` 58.0.31, `expo-secure-store` 58.0.3, `expo-status-bar` 58.0.5 e `react-native-safe-area-context` 5.11.1. O aviso do Metro passou a dizer "58.0.22 → ~58.0.25" e "7 other packages".
 6. Decidido: merge da `fase7c-gps` no `main` feito em 2026-11-16.
-7. Push da `fase8-visual` e merge no `main`: pendentes.
+7. Decidido: merge e push da `fase8-visual` (2026-11-16) e da `fase9-apk` (2026-11-17) no `main` feitos.
